@@ -84,11 +84,20 @@ func handleAgentMessages(w http.ResponseWriter, r *http.Request, pool *AccountPo
 		writeError(gatewayError("unsupported_capability", 400, "Agent V3 does not provide enforced structured output schemas", false))
 		return
 	}
-	messages, attachments := convertAnthropicMessages(req.System, req.Messages)
-	if len(attachments) > 0 || hasUnsupportedAgentBlocks(req.Messages) || ask || AppConfig.AskModeDefault() {
-		writeError(gatewayError("unsupported_capability", 400, "Agent V3 currently accepts text and tool history; attachments and ASK mode are unsupported", false))
+	if hasUnsupportedAgentBlocks(req.Messages) || ask || AppConfig.AskModeDefault() {
+		writeError(gatewayError("unsupported_capability", 400, "Agent V3 accepts text, user images and tool history; documents and ASK mode are unsupported", false))
 		return
 	}
+	ctx, cancel := context.WithTimeout(r.Context(), agentTimeout())
+	defer cancel()
+	imageMessages, images, err := prepareAgentImages(ctx, req.Messages)
+	if err != nil {
+		writeError(err)
+		return
+	}
+	// All image blocks are now validated references. The legacy converter must
+	// never download or silently discard an Agent image.
+	messages, _ := convertAnthropicMessages(req.System, imageMessages)
 	if err := validateAgentHistory(messages); err != nil {
 		writeError(err)
 		return
@@ -123,9 +132,7 @@ func handleAgentMessages(w http.ResponseWriter, r *http.Request, pool *AccountPo
 		// complete supplied history and IDs alongside that prompt for replay.
 		messages = append([]ChatMessage{{Role: "system", Content: "Historical context only; already executed calls must not be repeated.\n" + buildAgentHistoryReplay(original)}}, messages...)
 	}
-	ctx, cancel := context.WithTimeout(r.Context(), agentTimeout())
-	defer cancel()
-	options := CallOptions{Context: ctx, Protocol: "agent", AgentToolChoice: choice}
+	options := CallOptions{Context: ctx, Protocol: "agent", AgentToolChoice: choice, AgentImages: images}
 	if hasTools {
 		options.AgentTools = tools
 	}
@@ -186,6 +193,10 @@ func hasUnsupportedAgentBlocks(messages []AnthropicMessage) bool {
 				kind, _ := block["type"].(string)
 				switch kind {
 				case "text", "tool_use", "tool_result", "thinking", "redacted_thinking":
+				case "image":
+					if message.Role != "user" {
+						return true
+					}
 				default:
 					return true
 				}

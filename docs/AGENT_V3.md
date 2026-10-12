@@ -127,7 +127,21 @@ Agent 使用现有格式注入工具桥接，严格检查模型生成的工具�
 
 普通模型文本可以真实返回 `end_turn`。请求强制工具调用时，没有合法调用则返回 502；不编造工具调用。已开始输出的响应不会切换账号重放，也不会把错误收尾为成功的完成事件。
 
-目前显式拒绝 Agent 附件、ASK 模式、研究模式、工作区搜索覆盖、采样控制、停止序列、thinking 块、context_management 和强制 JSON Schema。`output_config.effort` 使用模型候选/API 支持的强度，并核对实际返回。`max_tokens` 等兼容字段没有经过验证的上游硬限制；不能依赖它们控制 Agent 的实际生成量。
+目前显式拒绝 Agent 文档附件、ASK 模式、研究模式、工作区搜索覆盖、采样控制、停止序列、thinking 块、context_management 和强制 JSON Schema。用户图片输入已接入，见下节。`output_config.effort` 使用模型候选/API 支持的强度，并核对实际返回。`max_tokens` 等兼容字段没有经过验证的上游硬限制；不能依赖它们控制 Agent 的实际生成量。
+
+## 图片输入（2026-10-13）
+
+Agent Service 的图片流程与 Workflow 附件不同。根据 Notion 公开前端的消息构建和上传代码，先调用 `createAgentServiceFileUploadURL`，使用 `target: {"type":"user"}` 暂存文件；向返回的签名地址上传原始图片，再调用 `completeAgentServiceFileUpload`。创建 Agent 线程时，文本块之后附加 `{"type":"file","file_id":"已完成上传的文件 ID"}`，不使用 Workflow 的 `attachment:` URI 或 `processAgentAttachment` 任务。
+
+三个客户端接口共用此流程：Messages 接收 `image` 与 `source`，Chat Completions 接收 `image_url`，Responses 接收 `input_image`。支持 base64/data URI 和公开 HTTPS 图片地址。网关限制为每张 10 MiB、整次请求 20 MiB、最多 19 张图片，接受 PNG、JPEG、GIF、WebP；这些是网关限制，不是 Notion 公布的配额。远程图片不携带账号 Cookie 或 API Key，并拒绝 URL 凭据、非 HTTPS、私网地址和指向私网的重定向。历史中的图片位置使用文件名标记保留，包括只发送图片的用户消息；每次完整历史重放会重新上传其图片。
+
+2026-10-13 使用仅开放 Opus 5.5 的账号测试一张合成图，提示语没有透露颜色和形状。Messages JSON、Chat Completions JSON、Responses SSE 三项均返回 HTTP 200，正确识别从左到右的红色圆形、蓝色正方形、绿色三角形，实际模型均为 `albuquerque-quinn`。Responses 收到完整结束事件。本轮实测图片格式为 PNG；其他允许格式没有逐一进行上游实测。未修改 Notion 页面。
+
+替换本地可执行文件并重启后，再通过正在运行的 `http://127.0.0.1:8088/v1/responses` 发送同一张图片，约 7.59 秒返回 HTTP 200 和完整 SSE 结束事件，回答 `Red circle, blue square, green triangle`。本机脱敏结果保存在 Git 忽略的 `.local-runtime/vision-live-report.json`。
+
+Cherry Studio 的视觉图标和是否实际上传图片是两件事。本机 2.0.9 的 OpenAI 兼容模型拉取只转换模型 ID、名称和归属，能力由客户端模型注册表/本地设置识别；它不会直接使用网关模型列表的额外能力字段。自定义 `agent/opus-5.5` 没有图标不能证明 Notion 模型缺少视觉能力；若客户端按能力限制图片上传，需要在该模型的本地设置中启用视觉。
+
+离线测试覆盖三种接口的 JSON/SSE、上传原始字节、上传完成后才创建推理、存储请求不泄露登录凭据、图片历史与图片独立消息、非法来源和大小/数量限制。全量 `go test -race ./...` 与 `go vet ./...` 通过。真实图片测试默认跳过，需设置 `NOTION_LIVE_VISION=1` 及 `NOTION_LIVE_ACCOUNT_FILE`；可选 `NOTION_LIVE_VISION_FIXTURE` 将合成图保存到本机。测试不会保存账号凭据或签名上传地址。
 
 审批策略保留 `review_for_me`，网关不调用任何批准接口，并关闭建议编辑工具。观察到审批等待时返回 409，需要用户在 Notion 内处理。
 

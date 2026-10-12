@@ -78,7 +78,7 @@ func classifyAgentHTTPError(status int, body []byte, endpoints ...string) (resul
 		operation := "Agent API"
 		if len(endpoints) > 0 {
 			switch endpoints[0] {
-			case "getAvailableModels", "createAgentThread", "getThreadTranscript":
+			case "getAvailableModels", "createAgentThread", "getThreadTranscript", "createAgentServiceFileUploadURL", "completeAgentServiceFileUpload":
 				operation = endpoints[0]
 			}
 		}
@@ -128,8 +128,9 @@ type agentCreateRequest struct {
 }
 
 type agentTextBlock struct {
-	Type string      `json:"type"`
-	Text interface{} `json:"text"`
+	Type   string      `json:"type"`
+	Text   interface{} `json:"text,omitempty"`
+	FileID string      `json:"file_id,omitempty"`
 }
 
 type agentEntity struct {
@@ -453,7 +454,7 @@ func CallAgentInference(acc *Account, messages []ChatMessage, name string, disab
 		opt = opts[0]
 	}
 	if len(opt.Attachments) > 0 || opt.IsResearcher || opt.UseReadOnlyMode || (opt.EnableWorkspaceSearch != nil && *opt.EnableWorkspaceSearch) {
-		return gatewayError("unsupported_capability", 400, "Agent V3 does not yet support attachments, researcher, ASK mode, or workspace search overrides", false)
+		return gatewayError("unsupported_capability", 400, "Agent V3 does not support Workflow attachments, researcher, ASK mode, or workspace search overrides", false)
 	}
 	ctx := opt.Context
 	if ctx == nil {
@@ -493,6 +494,16 @@ func CallAgentInference(acc *Account, messages []ChatMessage, name string, disab
 	var created map[string]interface{}
 	if err := waitAgentRequestSlot(ctx, acc); err != nil {
 		return err
+	}
+	if len(opt.AgentImages) > agentMaxImages {
+		return gatewayError("unsupported_capability", 400, "Agent requests accept at most 19 images", false)
+	}
+	for _, image := range opt.AgentImages {
+		block, err := uploadAgentImage(ctx, acc, image)
+		if err != nil {
+			return err
+		}
+		payload.Content = append(payload.Content, block)
 	}
 	if err := agentPostJSON(ctx, acc, "createAgentThread", payload, &created); err != nil {
 		return err

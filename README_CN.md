@@ -31,6 +31,7 @@ powershell -ExecutionPolicy Bypass -File .\scripts\start-local.ps1
 - **会话与响应处理**：支持完整历史重放、JSON 响应、轮询后缓冲输出 SSE，以及工具调用和工具结果历史的格式转换。
 - **请求控制**：支持超时、取消、每账号请求间隔；明确指定思考强度时核对实际返回值。
 - **联网搜索**：Agent 采用 Notion 原生网页检索，允许与否由管理面板或 `X-Web-Search` 请求头控制；实际检索以工具结果为准。
+- **图片输入**：Messages 的图片块、Chat Completions 的 `image_url` 和 Responses 的 `input_image` 通过 Agent Service 上传并以文件 ID 附加。Opus 5.5 已实测能够识图。
 - **运行设置**：管理面板可调整 Agent 开关、默认协议、超时、轮询间隔和请求间隔。
 
 ## 客户端接入

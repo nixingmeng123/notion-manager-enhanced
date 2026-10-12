@@ -257,7 +257,8 @@ type CallOptions struct {
 	Protocol              string // fixed by the request router, unaffected by later settings changes
 	AgentToolChoice       string
 	Context               context.Context
-	AgentTools            []Tool // non-nil enables strict validation of text tool calls
+	AgentTools            []Tool           // non-nil enables strict validation of text tool calls
+	AgentImages           []FileAttachment // validated images staged for Personal Agent V3
 	NativeToolUses        *[]AgentValueEntry
 	ThinkingBlocks        *[]ThinkingBlock
 	EnableWebSearch       bool                  // force useWebSearch=true in Notion config

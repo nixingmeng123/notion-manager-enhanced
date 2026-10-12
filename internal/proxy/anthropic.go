@@ -1747,6 +1747,7 @@ func handleAnthropicStream(w http.ResponseWriter, acc *Account, messages []ChatM
 	if len(options) > 0 {
 		callOpts.Context = options[0].Context
 		callOpts.AgentTools = options[0].AgentTools
+		callOpts.AgentImages = options[0].AgentImages
 		callOpts.AgentToolChoice = options[0].AgentToolChoice
 		callOpts.Protocol = options[0].Protocol
 	}
@@ -2033,6 +2034,7 @@ func handleAnthropicNonStream(w http.ResponseWriter, acc *Account, messages []Ch
 	if len(options) > 0 {
 		callOpts.Context = options[0].Context
 		callOpts.AgentTools = options[0].AgentTools
+		callOpts.AgentImages = options[0].AgentImages
 		callOpts.AgentToolChoice = options[0].AgentToolChoice
 		callOpts.Protocol = options[0].Protocol
 	}
