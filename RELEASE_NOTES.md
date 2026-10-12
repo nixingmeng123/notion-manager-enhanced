@@ -1,6 +1,6 @@
 # Notion Manager Enhanced v0.1.1
 
-原生 Go 集成 Personal Agent V3，保留原有 Workflow、账号池、认证和管理面板。三种兼容 API 支持 JSON/SSE；运行时核对 Notion 实际返回模型，模型替换时返回错误。
+使用 Go 实现的 Notion Personal Agent V3 本地客户端，通过用户自己的已登录账号连接 Notion。支持模型身份校验、会话处理、JSON/SSE 响应和本地管理界面，并保留 Workflow 协议兼容。
 
 本版解决测试账号密集调用时 Responses SSE 和工具请求被上游拒绝的问题：新增每账号的请求起始间隔，等待期间可取消，上次起始时间保存在原账号文件中。间隔可在面板设置，范围 0–300 秒，0 关闭。本地启动脚本和示例配置采用 15 秒。
 

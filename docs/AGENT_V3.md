@@ -1,6 +1,6 @@
 # Notion Manager Enhanced：Workflow + Personal Agent V3
 
-本实现将 Personal Agent V3 原生加入原有 Go 后端，复用账号池、Chrome TLS 传输、网络代理和三种 API 的响应转换。无需额外 Python 服务。原有 Workflow、管理面板、研究模式和会话恢复路径保留。
+本实现将 Personal Agent V3 原生加入 Go 后端，使用已有账号存储、Chrome TLS 传输和响应格式转换。无需额外 Python 服务。保留 Workflow 协议兼容和本地管理面板。
 
 ## 源码依据
 

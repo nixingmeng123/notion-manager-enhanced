@@ -16,31 +16,22 @@ After signing in through `/dashboard/`, the frontend uses the `dashboard_session
 - `/admin/refresh`
 - `/admin/settings`
 - `/admin/stats`
-- `/admin/register` (legacy synchronous) and `/admin/register/*` (Job-based)
 - `/proxy/start`
 
 Login uses client-side SHA256(salt + password) so the plaintext password never traverses the network — see `internal/proxy/dashboard.go`.
 
-## Pool view
+## Account status
 
-`/dashboard/` lists every account in the pool with:
+`/dashboard/` shows imported account details:
 
 - Email, plan type, workspace
 - Remaining quota (basic / premium balance), space + user usage, research usage
 - Discovered models, last-checked timestamp
 - Per-row actions: **Open proxy**, **Copy token**, **Delete account**
 
-The list is fetched from `GET /admin/accounts?q=&page=&page_size=`. The Go server applies the same sort the dashboard previously did client-side, then filters and paginates, so big pools (1k+ accounts) stay responsive. The response includes a pool-wide `summary` block (premium count, total remaining, etc.) for the headline cards regardless of pagination.
+The account list is fetched from `GET /admin/accounts?q=&page=&page_size=` and supports search, sorting and pagination.
 
 When `q`/`page`/`page_size` are all absent, the response keeps its historical shape (full unsorted list) so older scripts and curl pipelines stay happy.
-
-## Headline cards
-
-Pool-wide aggregates rendered from the `summary` block:
-
-- Total / available / exhausted / no-workspace / premium accounts
-- Research-limited accounts (non-premium accounts that have used ≥ 3 research-mode runs this billing cycle)
-- Total remaining basic quota, total premium balance/limit, total user/space usage
 
 ## Token usage statistics
 
@@ -52,18 +43,6 @@ A dedicated panel reading `GET /admin/stats`. Shows:
 - **Top-5 models** and **top-5 accounts** by total tokens
 
 Counters survive restarts via `accounts/.token_stats.json`. The flush loop runs every 5 s.
-
-## Bulk register drawer
-
-Top-right `+ Register` button. Streams a job's progress live. See [Bulk Registration](registration.md) for the full protocol; in summary:
-
-1. Pick a Provider (Microsoft is the default)
-2. (Optional) set per-job concurrency and upstream proxy
-3. Paste credentials (`email----password----client_id----refresh_token`, even-row count)
-4. **Start** kicks off the run; the drawer streams `event: snapshot`, `event: step`, `event: done` over `/admin/register/jobs/{id}/events`
-5. Failed rows can be retried in one click — credentials come from the server-side sidecar; the dashboard never re-asks for the secret
-
-A history drawer (`History` button) shows the most recent jobs from `/admin/register/jobs`, with per-job snapshot, retry, and delete actions.
 
 ## Settings panel
 

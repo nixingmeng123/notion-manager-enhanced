@@ -19,7 +19,7 @@ accounts/.token_stats.json
 .playwright-mcp/
 !accounts/example.json
 
-# Bulk register / login flow debug artefacts
+# Login flow debug artefacts
 _*.log
 _*.txt
 _*.json

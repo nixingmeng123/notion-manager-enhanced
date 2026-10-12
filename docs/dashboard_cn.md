@@ -16,31 +16,22 @@
 - `/admin/refresh`
 - `/admin/settings`
 - `/admin/stats`
-- `/admin/register`（旧同步接口）和 `/admin/register/*`（基于 Job 的接口）
 - `/proxy/start`
 
 登录密码使用客户端 SHA256(salt + password)，明文密码永远不离开浏览器，详见 `internal/proxy/dashboard.go`。
 
-## 池视图
+## 账号状态
 
-`/dashboard/` 列出池内每个账号：
+`/dashboard/` 显示已导入账号的状态：
 
 - 邮箱、计划类型、workspace
 - 剩余额度（basic / premium 余额）、space / user 用量、研究用量
 - 已发现模型、最近一次检查时间
 - 单行操作：**打开代理**、**复制 token**、**删除账号**
 
-列表来源于 `GET /admin/accounts?q=&page=&page_size=`。Server 端先按 Dashboard 旧的客户端排序规则排序，再按关键字过滤、再分页，所以 1k+ 大池也不卡。响应里始终带一份池级 `summary`（付费账号数、总剩余等），保证 headline 卡片不被分页影响。
+列表来源于 `GET /admin/accounts?q=&page=&page_size=`，支持搜索、排序与分页。
 
 当 `q`/`page`/`page_size` 都缺省时，响应保持**历史完整列表形态**，老脚本 / curl 流水线照旧能用。
-
-## Headline 卡片
-
-来自 `summary` 的池级聚合：
-
-- 总数 / 可用 / 已耗尽 / 没有 workspace / 付费账号数
-- 研究受限账号数（非付费 + 当月研究用量 ≥ 3）
-- 总剩余 basic 额度、总 premium 余额 / 上限、总 user / space 用量
 
 ## Token 用量统计
 
@@ -51,19 +42,7 @@
 - **近 30 天** 日序列，折线图
 - **Top‑5 模型** 与 **Top‑5 账号**（按总 token 排序）
 
-数据落盘在 `accounts/.token_stats.json`，每 5 秒批量 flush，重启不丢。
-
-## 批量注册抽屉
-
-右上角 `+ Register` 按钮。完整协议见 [批量注册](registration_cn.md)，简要流程：
-
-1. 选 Provider（默认 Microsoft）
-2. 可选：设置单批并发、单批上游代理
-3. 粘贴凭据（`email----password----client_id----refresh_token`，请保持偶数行）
-4. **Start** 启动 Job，抽屉通过 `/admin/register/jobs/{id}/events` 接收 `event: snapshot` / `step` / `done`，实时刷新进度
-5. 失败行支持一键重试，凭据从服务端 sidecar 还原，无需再次粘贴
-
-`History` 按钮打开历史抽屉，列出 `/admin/register/jobs` 返回的最近 Job，每条都支持查看快照、重试、删除。
+数据落盘在 `accounts/.token_stats.json`，每 5 秒写入一次，重启不丢。
 
 ## 设置面板
 

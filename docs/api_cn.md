@@ -2,7 +2,7 @@
 
 [← 返回 README](../README_CN.md)
 
-`/v1/messages` 接收 Anthropic Messages API 请求体，是**唯一**对外的客户端入口。所有 admin/dashboard 接口都在 `/admin/*` 与 `/dashboard/` 下，使用独立的会话 cookie 鉴权（详见 [Dashboard](dashboard_cn.md)）。
+本地客户端接入支持 `/v1/messages`、`/v1/chat/completions` 和 `/v1/responses`。管理界面使用独立的会话鉴权，详见 [Dashboard](dashboard_cn.md)。本文描述 Workflow 兼容行为；Personal Agent V3 的模型、思考强度和功能限制以 [Agent V3 文档](AGENT_V3.md)为准。
 
 ## 鉴权
 
@@ -14,7 +14,7 @@
 -H "x-api-key: <api_key>"
 ```
 
-服务端 key 来自 `config.yaml` 的 `proxy.api_key`（环境变量 `PROXY_API_KEY` 可覆盖）。
+服务端 key 来自 `config.yaml` 的 `server.api_key`（环境变量 `API_KEY` 可覆盖）。
 
 ## 基本请求
 

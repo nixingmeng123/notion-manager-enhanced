@@ -57,8 +57,7 @@ proxy:
     enable_workspace_search: false
     # Optional upstream proxy applied to every Notion-bound connection
     # (API calls + reverse-proxy /ai HTML/API/msgstore + WebSocket).
-    # Per-job proxies in the bulk-register modal take priority; an empty
-    # modal value falls back to this global URL. Empty here = direct dial.
+    # Empty here = direct dial.
     # Supported schemes: http, https, socks5, socks5h.
     # Editable at runtime via the dashboard's "API 设置 → 全局代理".
     notion_proxy: ""
@@ -96,11 +95,11 @@ refresh:
     # to live-check on every request (slower but most up-to-date). Default: 5.
     live_check_seconds: 5
 register:
-    # Persistence file for the bulk-register job history (created on first run).
+    # Local job history file (created when used).
     history_file: "accounts/.register_history.json"
     # How many completed jobs to keep in memory / reload on startup.
     history_memory_cap: 100
-    # Pre-filled "concurrency" value in the bulk-register modal.
+    # Default job concurrency.
     default_concurrency: 1
 browser:
     # User-Agent string

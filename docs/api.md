@@ -2,10 +2,7 @@
 
 [← Back to README](../README.md)
 
-`/v1/messages` accepts Anthropic Messages API payloads and is the only endpoint
-intended for external clients. All admin / dashboard surfaces live under
-`/admin/*` and `/dashboard/` and use a separate session-cookie auth model
-(see [Dashboard](dashboard.md)).
+Local clients can use `/v1/messages`, `/v1/chat/completions` and `/v1/responses`. Dashboard endpoints use separate session authentication; see [Dashboard](dashboard.md). This document describes Workflow compatibility. See [Agent V3 documentation](AGENT_V3.md) for Personal Agent models, reasoning effort and capability limits.
 
 ## Authentication
 
@@ -17,8 +14,8 @@ Send the API key the same way you would talk to Anthropic:
 -H "x-api-key: <api_key>"
 ```
 
-The accepted key is `proxy.api_key` in `config.yaml` (env override
-`PROXY_API_KEY`).
+The accepted key is `server.api_key` in `config.yaml` (env override
+`API_KEY`).
 
 ## Standard request
 
