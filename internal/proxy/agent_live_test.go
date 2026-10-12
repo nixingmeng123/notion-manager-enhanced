@@ -5,8 +5,10 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
+	"net/http/httptest"
 	"os"
 	"sort"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -15,6 +17,12 @@ import (
 type liveTraceTransport struct {
 	base        http.RoundTripper
 	path, token string
+}
+
+func (r *liveTraceTransport) CloseIdleConnections() {
+	if closer, ok := r.base.(interface{ CloseIdleConnections() }); ok {
+		closer.CloseIdleConnections()
+	}
 }
 
 func (r *liveTraceTransport) RoundTrip(req *http.Request) (*http.Response, error) {
@@ -31,7 +39,26 @@ func (r *liveTraceTransport) RoundTrip(req *http.Request) (*http.Response, error
 	clean := redactSensitiveText(strings.ReplaceAll(string(data), r.token, "[REDACTED]"))
 	file, err := os.OpenFile(r.path, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0600)
 	if err == nil {
-		_ = json.NewEncoder(file).Encode(map[string]interface{}{"endpoint": req.URL.Path, "status": resp.StatusCode, "body": json.RawMessage(clean)})
+		entry := map[string]interface{}{"endpoint": req.URL.Path, "status": resp.StatusCode}
+		if json.Valid([]byte(clean)) {
+			entry["body"] = json.RawMessage(clean)
+		} else {
+			entry["body"] = "non-JSON upstream response omitted"
+		}
+		if strings.HasSuffix(req.URL.Path, "/createAgentThread") && req.GetBody != nil {
+			if reader, err := req.GetBody(); err == nil {
+				var payload map[string]json.RawMessage
+				if json.NewDecoder(reader).Decode(&payload) == nil {
+					// Synthetic prompts only. Omit account and generated IDs.
+					delete(payload, "spaceId")
+					delete(payload, "threadId")
+					delete(payload, "clientMessageId")
+					entry["request"] = payload
+				}
+				_ = reader.Close()
+			}
+		}
+		_ = json.NewEncoder(file).Encode(entry)
 		_ = file.Close()
 	}
 	return resp, nil
@@ -56,13 +83,13 @@ func TestAgentV3LiveAccount(t *testing.T) {
 	previous := AppConfig
 	AppConfig = DefaultConfig()
 	AppConfig.AgentV3.Enabled = true
-	AppConfig.AgentV3.PollIntervalMS = 1000
+	AppConfig.AgentV3.PollIntervalMS = 3000
 	AppConfig.AgentV3.TimeoutSeconds = 60
 	t.Cleanup(func() { AppConfig = previous })
 	if tracePath := os.Getenv("NOTION_LIVE_TRACE_FILE"); tracePath != "" {
 		previousClient := agentHTTPClient
 		agentHTTPClient = func(timeout time.Duration) *http.Client {
-			base := getChromeHTTPClient(timeout)
+			base := previousClient(timeout)
 			copy := *base
 			copy.Transport = &liveTraceTransport{base: base.Transport, path: tracePath, token: acc.TokenV2}
 			return &copy
@@ -95,12 +122,86 @@ func TestAgentV3LiveAccount(t *testing.T) {
 	if model == "" {
 		return
 	}
-	var output strings.Builder
-	err = CallAgentInference(&acc, []ChatMessage{{Role: "user", Content: "Connectivity test: reply with exactly AGENT_OK. Do not use any tools or modify any workspace content."}}, model, true,
-		func(text string, _ bool, _ *UsageInfo) { output.WriteString(text) }, CallOptions{Context: ctx})
-	t.Logf("inference model=%q output=%q", model, output.String())
-	if err != nil {
-		t.Fatalf("inference kind=%s status=%d: %s", asGatewayError(err).Kind, asGatewayError(err).Status, err)
+	repetitions := 1
+	if value := os.Getenv("NOTION_LIVE_AGENT_REPETITIONS"); value != "" {
+		repetitions, err = strconv.Atoi(value)
+		if err != nil || repetitions < 1 || repetitions > 8 {
+			t.Fatal("NOTION_LIVE_AGENT_REPETITIONS must be between 1 and 8")
+		}
+	}
+	for attempt := 1; attempt <= repetitions; attempt++ {
+		var output strings.Builder
+		err = CallAgentInference(&acc, []ChatMessage{{Role: "user", Content: "Connectivity test: reply with exactly AGENT_OK. Do not use any tools or modify any workspace content."}}, model, true,
+			func(text string, _ bool, _ *UsageInfo) { output.WriteString(text) }, CallOptions{Context: ctx})
+		t.Logf("inference attempt=%d model=%q output=%q", attempt, model, output.String())
+		if err != nil {
+			t.Fatalf("inference kind=%s status=%d: %s", asGatewayError(err).Kind, asGatewayError(err).Status, err)
+		}
+		if output.String() != "AGENT_OK" {
+			t.Fatal("live inference did not return the expected test response")
+		}
+	}
+}
+
+// Explicit live diagnostic through the same API adapters as the executable.
+// Response traces remain opt-in and local; no standard tool is executed.
+func TestAgentV3LiveAPISequence(t *testing.T) {
+	if os.Getenv("NOTION_LIVE_API_SEQUENCE") != "1" {
+		t.Skip("live API sequence not enabled")
+	}
+	data, err := os.ReadFile(os.Getenv("NOTION_LIVE_ACCOUNT_FILE"))
+	var acc Account
+	if err != nil || json.Unmarshal(data, &acc) != nil || acc.TokenV2 == "" || acc.SpaceID == "" {
+		t.Fatal("incomplete live account")
+	}
+	previous, previousClient := AppConfig, agentHTTPClient
+	AppConfig = DefaultConfig()
+	AppConfig.AgentV3.Enabled = true
+	AppConfig.Server.AccountsDir = ""
+	if value := os.Getenv("NOTION_LIVE_MIN_REQUEST_INTERVAL_SECONDS"); value != "" {
+		seconds, err := strconv.Atoi(value)
+		if err != nil || seconds < 0 || seconds > 300 {
+			t.Fatal("live request interval must be between 0 and 300 seconds")
+		}
+		AppConfig.AgentV3.MinRequestIntervalSeconds = seconds
+	}
+	t.Cleanup(func() { AppConfig, agentHTTPClient = previous, previousClient })
+	if tracePath := os.Getenv("NOTION_LIVE_TRACE_FILE"); tracePath != "" {
+		agentHTTPClient = func(timeout time.Duration) *http.Client {
+			base := previousClient(timeout)
+			copy := *base
+			copy.Transport = &liveTraceTransport{base: base.Transport, path: tracePath, token: acc.TokenV2}
+			return &copy
+		}
+	}
+	pool := NewAccountPool()
+	pool.accounts = []*Account{&acc}
+	for _, stream := range []bool{false, true} {
+		for _, endpoint := range []string{"messages", "chat", "responses"} {
+			body := map[string]interface{}{"model": "agent/opus-5.5", "stream": stream}
+			prompt := "Reply with exactly API_OK. Do not use tools or modify workspace content."
+			var handler http.HandlerFunc
+			terminal := ""
+			switch endpoint {
+			case "messages":
+				handler, terminal = HandleAnthropicMessages(pool), "message_stop"
+				body["messages"] = []map[string]string{{"role": "user", "content": prompt}}
+			case "chat":
+				handler, terminal = HandleOpenAIChatCompletions(pool), "[DONE]"
+				body["messages"] = []map[string]string{{"role": "user", "content": prompt}}
+			case "responses":
+				handler, terminal = HandleOpenAIResponses(pool), "response.completed"
+				body["input"] = prompt
+			}
+			payload, _ := json.Marshal(body)
+			rec := httptest.NewRecorder()
+			handler(rec, httptest.NewRequest("POST", "/v1/"+endpoint, strings.NewReader(string(payload))))
+			text := rec.Body.String()
+			t.Logf("API=%s stream=%v status=%d", endpoint, stream, rec.Code)
+			if rec.Code != 200 || !strings.Contains(text, "API_OK") || (stream && !strings.Contains(text, terminal)) {
+				t.Fatalf("live API sequence failed: %s", redactSensitiveText(strings.ReplaceAll(text, acc.TokenV2, "[REDACTED]")))
+			}
+		}
 	}
 }
 

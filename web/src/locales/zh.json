@@ -173,6 +173,8 @@
     "default": "默认协议",
     "timeout": "Agent 超时（秒）",
     "poll": "轮询间隔（毫秒）",
+    "interval": "账号请求间隔（秒）",
+    "interval_hint": "0 关闭；密集请求被上游拒绝时可尝试 15 秒。",
     "modes": "Agent：History Replay · 轮询后缓冲输出 SSE · Token 用量不可用",
     "requests": "Agent 请求",
     "failures": "失败",

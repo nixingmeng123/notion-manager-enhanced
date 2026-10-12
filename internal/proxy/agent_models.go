@@ -91,6 +91,7 @@ type AgentCapability struct {
 	CooldownUntil            time.Time                 `json:"cooldown_until,omitempty"`
 	Failures                 map[string]int            `json:"failures"`
 	Requests                 int                       `json:"requests"`
+	LastStartedAt            time.Time                 `json:"last_started_at,omitempty"`
 	ModelSelectionRestricted bool                      `json:"model_selection_restricted"`
 }
 

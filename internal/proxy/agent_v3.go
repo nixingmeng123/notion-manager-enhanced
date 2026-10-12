@@ -58,7 +58,7 @@ func agentPostJSON(ctx context.Context, acc *Account, endpoint string, payload i
 		return gatewayError("transcript_parse", 502, "upstream response could not be read within the size limit", false)
 	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return classifyAgentHTTPError(resp.StatusCode, data)
+		return classifyAgentHTTPError(resp.StatusCode, data, endpoint)
 	}
 	if !utf8.Valid(data) {
 		return gatewayError("transcript_parse", 502, "upstream response contains invalid UTF-8", false)
@@ -69,20 +69,33 @@ func agentPostJSON(ctx context.Context, acc *Account, endpoint string, payload i
 	return nil
 }
 
-func classifyAgentHTTPError(status int, body []byte) *GatewayError {
+func classifyAgentHTTPError(status int, body []byte, endpoints ...string) (result *GatewayError) {
+	defer func() {
+		// Only fixed operation names and the HTTP status are exposed. Do not
+		// echo a URL, upstream error text, header or arbitrary error code.
+		operation := "Agent API"
+		if len(endpoints) > 0 {
+			switch endpoints[0] {
+			case "getAvailableModels", "createAgentThread", "getThreadTranscript":
+				operation = endpoints[0]
+			}
+		}
+		result.Message += " (" + operation + ", upstream HTTP " + strconv.Itoa(status) + ")"
+	}()
 	// Inspect only for classification. Never put the upstream body in an error
 	// string or log, even when the upstream echoes cookies/Authorization.
 	var detail struct {
+		Name    string `json:"name"`
 		Code    string `json:"code"`
 		Message string `json:"message"`
 		Error   string `json:"error"`
 	}
 	_ = json.Unmarshal(body, &detail)
-	code := strings.ToLower(detail.Code + " " + detail.Message + " " + detail.Error)
+	code := strings.ToLower(detail.Name + " " + detail.Code + " " + detail.Message + " " + detail.Error)
 	switch {
 	case status == 401:
 		return gatewayError("authentication", 401, "Notion login credentials were rejected", true)
-	case status == 429:
+	case status == 429 || strings.Contains(code, "rate_limit") || strings.Contains(code, "ratelimited") || strings.Contains(code, "rate limit"):
 		return gatewayError("rate_limit", 429, "Notion Agent rate limit exceeded", true)
 	case strings.Contains(code, "quota") || strings.Contains(code, "usage limit") || strings.Contains(code, "credit"):
 		return gatewayError("quota", 429, "Notion Agent quota is exhausted", true)
@@ -366,6 +379,11 @@ func CallAgentInference(acc *Account, messages []ChatMessage, name string, disab
 	if err != nil {
 		return err
 	}
+	explicitEffort := strings.TrimSpace(opt.ReasoningEffort) != ""
+	if !explicitEffort {
+		// Absence is an upstream default, not a client demand for medium.
+		effort = ""
+	}
 	threadID := generateUUIDv4()
 	payload := agentCreateRequest{
 		Type: "personal_agent", SpaceID: acc.SpaceID, ThreadID: threadID, Model: model.Slug,
@@ -377,6 +395,9 @@ func CallAgentInference(acc *Account, messages []ChatMessage, name string, disab
 		EnableSuggestedEditsTools: false,
 	}
 	var created map[string]interface{}
+	if err := waitAgentRequestSlot(ctx, acc); err != nil {
+		return err
+	}
 	if err := agentPostJSON(ctx, acc, "createAgentThread", payload, &created); err != nil {
 		return err
 	}
@@ -400,7 +421,10 @@ func CallAgentInference(acc *Account, messages []ChatMessage, name string, disab
 				if actual, ok := provider["model"].(string); ok && actual != "" && actual != model.Slug {
 					return gatewayError("model_permission", 403, "Notion selected a different model than requested; this account cannot honor the selected model", true)
 				}
-				if actual, ok := provider["reasoningEffort"].(string); ok && actual != "" && effort != "" && actual != effort {
+				if explicitEffort && actualEffort == "" {
+					return gatewayError("model_effort_unverified", 502, "Agent creation response did not identify the requested reasoning effort", false)
+				}
+				if explicitEffort && actualEffort != effort {
 					return gatewayError("unsupported_effort", 400, "Notion selected a different reasoning effort than requested", false)
 				}
 			}

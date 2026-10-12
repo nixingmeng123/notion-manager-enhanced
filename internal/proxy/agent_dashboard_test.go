@@ -29,7 +29,7 @@ func TestAgentV3SettingsValidationAndPersistence(t *testing.T) {
 		handler(rec, httptest.NewRequest("PUT", "/admin/settings", strings.NewReader(body)))
 		return rec
 	}
-	for _, body := range []string{`{"default_protocol":"unknown"}`, `{"agent_timeout_seconds":0}`, `{"agent_poll_interval_ms":99}`, `{"agent_v3_enabled":false,"default_protocol":"agent"}`} {
+	for _, body := range []string{`{"default_protocol":"unknown"}`, `{"agent_timeout_seconds":0}`, `{"agent_poll_interval_ms":99}`, `{"agent_min_request_interval_seconds":-1}`, `{"agent_min_request_interval_seconds":301}`, `{"agent_v3_enabled":false,"default_protocol":"agent"}`} {
 		if rec := invoke(body); rec.Code != 400 {
 			t.Fatalf("invalid settings accepted: %s: %s", body, rec.Body.String())
 		}
@@ -37,7 +37,7 @@ func TestAgentV3SettingsValidationAndPersistence(t *testing.T) {
 	if enhancedConfigSnapshot().DefaultProtocol != "workflow" {
 		t.Fatal("invalid update partially changed configuration")
 	}
-	rec := invoke(`{"default_protocol":"agent","agent_v3_enabled":true,"agent_timeout_seconds":120,"agent_poll_interval_ms":500,"agent_model_cache_seconds":60}`)
+	rec := invoke(`{"default_protocol":"agent","agent_v3_enabled":true,"agent_timeout_seconds":120,"agent_poll_interval_ms":500,"agent_model_cache_seconds":60,"agent_min_request_interval_seconds":15}`)
 	if rec.Code != 200 {
 		t.Fatalf("valid update rejected: %s", rec.Body.String())
 	}
@@ -46,7 +46,7 @@ func TestAgentV3SettingsValidationAndPersistence(t *testing.T) {
 		t.Fatal("settings persistence lost unrelated configuration")
 	}
 	var config Config
-	if err := yaml.Unmarshal(data, &config); err != nil || config.AgentV3.TimeoutSeconds != 120 || config.AgentV3.PollIntervalMS != 500 || config.Proxy.DefaultProtocol != "agent" {
+	if err := yaml.Unmarshal(data, &config); err != nil || config.AgentV3.TimeoutSeconds != 120 || config.AgentV3.PollIntervalMS != 500 || config.AgentV3.MinRequestIntervalSeconds != 15 || config.Proxy.DefaultProtocol != "agent" {
 		t.Fatalf("persisted config invalid: %s err=%v", data, err)
 	}
 	if route, err := resolveInferenceRoute("opus-5.5"); err != nil || route.Protocol != "agent" {

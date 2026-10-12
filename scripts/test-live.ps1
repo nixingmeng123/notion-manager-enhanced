@@ -1,11 +1,13 @@
 param([string]$BaseUrl = 'http://127.0.0.1:8088', [string]$Model = 'agent/opus-5.5', [switch]$CheckOtherModels,
-    [ValidateSet('all','responses_stream','tools')][string]$Probe = 'all')
+    [ValidateSet('all','responses_stream','tools')][string]$Probe = 'all',
+    [ValidateRange(0,60)][int]$MinIntervalSeconds = 0)
 $ErrorActionPreference = 'Stop'
 $projectRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
 $runtimeDirectory = Join-Path $projectRoot '.local-runtime'
 $access = Get-Content -LiteralPath (Join-Path $runtimeDirectory 'local-access.json') -Raw | ConvertFrom-Json
 $headers = @{ Authorization = 'Bearer ' + $access.api_key }
 $results = [Collections.Generic.List[object]]::new()
+$script:nextProbeAt = [DateTime]::MinValue
 # Refresh through the existing dashboard authentication, without logging the
 # password, hash, API key or session cookie.
 $salt = (Invoke-RestMethod ($BaseUrl + '/dashboard/auth/salt')).salt
@@ -19,7 +21,10 @@ do {
     $refresh=Invoke-RestMethod ($BaseUrl + '/admin/refresh') -WebSession $adminSession
 } while ($refresh.refreshing -and (Get-Date) -lt $deadline)
 function Invoke-LiveProbe([string]$Name, [string]$Endpoint, [hashtable]$Body) {
+    $delay = ($script:nextProbeAt - (Get-Date)).TotalMilliseconds
+    if ($delay -gt 0) { Start-Sleep -Milliseconds ([int][Math]::Ceiling($delay)) }
     $started = Get-Date
+    $script:nextProbeAt = $started.AddSeconds($MinIntervalSeconds)
     $response = Invoke-WebRequest -Method POST -Uri ($BaseUrl + $Endpoint) -Headers $headers -ContentType application/json `
         -Body ($Body | ConvertTo-Json -Depth 15 -Compress) -SkipHttpErrorCheck -TimeoutSec 120
     $entry = @{ name = $Name; status = [int]$response.StatusCode; seconds = [Math]::Round(((Get-Date)-$started).TotalSeconds,2); body = $response.Content }

@@ -93,7 +93,8 @@ func enhancedSettingsFields() map[string]interface{} {
 		"debug_logging": AppConfig.Server.DebugLogging, "notion_proxy": AppConfig.NotionProxyURL(),
 		"default_protocol": config.DefaultProtocol, "agent_v3_enabled": config.Enabled,
 		"agent_timeout_seconds": config.TimeoutSeconds, "agent_poll_interval_ms": config.PollIntervalMS,
-		"agent_model_cache_seconds": config.ModelCacheSeconds,
-		"agent_session_mode":        "history-replay", "agent_streaming_mode": "polling-buffered",
+		"agent_model_cache_seconds":          config.ModelCacheSeconds,
+		"agent_min_request_interval_seconds": config.MinRequestIntervalSeconds,
+		"agent_session_mode":                 "history-replay", "agent_streaming_mode": "polling-buffered",
 	}
 }

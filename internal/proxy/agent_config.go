@@ -7,10 +7,11 @@ import (
 )
 
 type AgentV3Config struct {
-	Enabled           bool `yaml:"enabled" json:"enabled"`
-	TimeoutSeconds    int  `yaml:"timeout_seconds" json:"timeout_seconds"`
-	PollIntervalMS    int  `yaml:"poll_interval_ms" json:"poll_interval_ms"`
-	ModelCacheSeconds int  `yaml:"model_cache_seconds" json:"model_cache_seconds"`
+	Enabled                   bool `yaml:"enabled" json:"enabled"`
+	TimeoutSeconds            int  `yaml:"timeout_seconds" json:"timeout_seconds"`
+	PollIntervalMS            int  `yaml:"poll_interval_ms" json:"poll_interval_ms"`
+	ModelCacheSeconds         int  `yaml:"model_cache_seconds" json:"model_cache_seconds"`
+	MinRequestIntervalSeconds int  `yaml:"min_request_interval_seconds" json:"min_request_interval_seconds"`
 }
 
 type enhancedConfig struct {
@@ -26,6 +27,7 @@ func enhancedConfigSnapshot() enhancedConfig {
 	cfg := enhancedConfig{AgentV3Config: AgentV3Config{TimeoutSeconds: 300, PollIntervalMS: 3000, ModelCacheSeconds: 300}, DefaultProtocol: "workflow"}
 	if AppConfig != nil {
 		cfg.Enabled = AppConfig.AgentV3.Enabled
+		cfg.MinRequestIntervalSeconds = AppConfig.AgentV3.MinRequestIntervalSeconds
 		if AppConfig.AgentV3.TimeoutSeconds > 0 {
 			cfg.TimeoutSeconds = AppConfig.AgentV3.TimeoutSeconds
 		}
@@ -54,6 +56,9 @@ func validateEnhancedConfig(cfg enhancedConfig) error {
 	}
 	if cfg.ModelCacheSeconds < 1 || cfg.ModelCacheSeconds > 86400 {
 		return fmt.Errorf("agent model cache must be between 1 and 86400 seconds")
+	}
+	if cfg.MinRequestIntervalSeconds < 0 || cfg.MinRequestIntervalSeconds > 300 {
+		return fmt.Errorf("agent minimum request interval must be between 0 and 300 seconds")
 	}
 	if cfg.DefaultProtocol == "agent" && !cfg.Enabled {
 		return fmt.Errorf("enable Agent V3 before setting it as the default protocol")

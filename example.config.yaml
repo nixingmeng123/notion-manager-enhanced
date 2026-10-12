@@ -73,6 +73,8 @@ agent_v3:
     timeout_seconds: 300
     poll_interval_ms: 3000
     model_cache_seconds: 300
+    # Conservative starting interval per account. 0 disables local pacing.
+    min_request_interval_seconds: 15
 timeouts:
     # Inference (streaming) request timeout in seconds
     inference_timeout: 300

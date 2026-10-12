@@ -247,6 +247,7 @@ export interface SearchSettings {
   agent_timeout_seconds: number
   agent_poll_interval_ms: number
   agent_model_cache_seconds: number
+  agent_min_request_interval_seconds: number
   agent_session_mode: string
   agent_streaming_mode: string
   enable_web_search: boolean
@@ -272,7 +273,7 @@ export async function fetchSettings(): Promise<SearchSettings> {
   return resp.json()
 }
 
-export async function updateSettings(settings: Partial<Pick<SearchSettings, 'enable_web_search' | 'enable_workspace_search' | 'ask_mode_default' | 'debug_logging' | 'notion_proxy' | 'default_protocol' | 'agent_v3_enabled' | 'agent_timeout_seconds' | 'agent_poll_interval_ms' | 'agent_model_cache_seconds'>>): Promise<SearchSettings> {
+export async function updateSettings(settings: Partial<Pick<SearchSettings, 'enable_web_search' | 'enable_workspace_search' | 'ask_mode_default' | 'debug_logging' | 'notion_proxy' | 'default_protocol' | 'agent_v3_enabled' | 'agent_timeout_seconds' | 'agent_poll_interval_ms' | 'agent_model_cache_seconds' | 'agent_min_request_interval_seconds'>>): Promise<SearchSettings> {
   // Uses dashboard session cookie for auth (not API key)
   const resp = await fetch('/admin/settings', {
     method: 'PUT',

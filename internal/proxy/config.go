@@ -308,7 +308,7 @@ func LoadConfig(configPath string) (*Config, error) {
 	if v := os.Getenv("DEFAULT_PROTOCOL"); v != "" {
 		cfg.Proxy.DefaultProtocol = v
 	}
-	for key, target := range map[string]*int{"AGENT_TIMEOUT_SECONDS": &cfg.AgentV3.TimeoutSeconds, "AGENT_POLL_INTERVAL_MS": &cfg.AgentV3.PollIntervalMS, "AGENT_MODEL_CACHE_SECONDS": &cfg.AgentV3.ModelCacheSeconds} {
+	for key, target := range map[string]*int{"AGENT_TIMEOUT_SECONDS": &cfg.AgentV3.TimeoutSeconds, "AGENT_POLL_INTERVAL_MS": &cfg.AgentV3.PollIntervalMS, "AGENT_MODEL_CACHE_SECONDS": &cfg.AgentV3.ModelCacheSeconds, "AGENT_MIN_REQUEST_INTERVAL_SECONDS": &cfg.AgentV3.MinRequestIntervalSeconds} {
 		if v := os.Getenv(key); v != "" {
 			n, err := strconv.Atoi(v)
 			if err != nil {

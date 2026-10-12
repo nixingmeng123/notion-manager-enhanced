@@ -173,6 +173,8 @@
     "default": "Default protocol",
     "timeout": "Agent timeout (seconds)",
     "poll": "Poll interval (ms)",
+    "interval": "Account request interval (s)",
+    "interval_hint": "0 disables pacing; try 15 seconds if the upstream rejects bursts.",
     "modes": "Agent: History Replay · polling with buffered SSE · token usage unavailable",
     "requests": "Agent requests",
     "failures": "Failures",

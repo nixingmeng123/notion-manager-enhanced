@@ -24,6 +24,7 @@ agent_v3:
   timeout_seconds: 300
   poll_interval_ms: 3000
   model_cache_seconds: 300
+  min_request_interval_seconds: 15
 proxy:
   default_protocol: "workflow"
 "@ | Set-Content -LiteralPath $configPath -Encoding utf8

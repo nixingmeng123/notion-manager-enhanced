@@ -1,12 +1,52 @@
 package proxy
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"strings"
 	"sync/atomic"
 	"testing"
 )
+
+func TestAgentV3OnlyEnforcesExplicitReasoningEffort(t *testing.T) {
+	for _, explicit := range []bool{false, true} {
+		t.Run(map[bool]string{false: "upstream_default", true: "explicit_medium"}[explicit], func(t *testing.T) {
+			_, acc := agentFixture(t, func(w http.ResponseWriter, r *http.Request) {
+				switch {
+				case strings.HasSuffix(r.URL.Path, "getAvailableModels"):
+					writeAgentCatalog(w, true)
+				case strings.HasSuffix(r.URL.Path, "createAgentThread"):
+					var payload agentCreateRequest
+					json.NewDecoder(r.Body).Decode(&payload)
+					want := ""
+					if explicit {
+						want = "medium"
+					}
+					if payload.ReasoningEffort != want {
+						t.Errorf("effort=%q want=%q", payload.ReasoningEffort, want)
+					}
+					w.Write([]byte(`{"thread":{"data":{"agent_provider":{"model":"albuquerque-quinn","reasoningEffort":"high"}}}}`))
+				default:
+					writeAgentTranscript(w, "OK", "finished")
+				}
+			})
+			opts := CallOptions{Context: context.Background()}
+			if explicit {
+				opts.ReasoningEffort = "medium"
+			}
+			emitted := false
+			err := CallAgentInference(acc, []ChatMessage{{Role: "user", Content: "hi"}}, "opus-5.5", true, func(string, bool, *UsageInfo) { emitted = true }, opts)
+			if explicit {
+				if err == nil || asGatewayError(err).Kind != "unsupported_effort" || emitted {
+					t.Fatal("explicit effort substitution was accepted")
+				}
+			} else if err != nil || !emitted || acc.agentSnapshot().Models[0].ActualEffort != "high" {
+				t.Fatal("upstream default effort was rejected or not recorded")
+			}
+		})
+	}
+}
 
 func TestAgentV3LiveCompletionShape(t *testing.T) {
 	var response agentTranscriptResponse

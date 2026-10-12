@@ -285,6 +285,7 @@ func HandleAdminSettings(configPath string, auth *DashboardAuth) http.HandlerFun
 				AgentTimeout          *int    `json:"agent_timeout_seconds"`
 				AgentPollInterval     *int    `json:"agent_poll_interval_ms"`
 				AgentModelCache       *int    `json:"agent_model_cache_seconds"`
+				AgentMinInterval      *int    `json:"agent_min_request_interval_seconds"`
 				EnableWebSearch       *bool   `json:"enable_web_search"`
 				EnableWorkspaceSearch *bool   `json:"enable_workspace_search"`
 				AskModeDefault        *bool   `json:"ask_mode_default"`
@@ -311,6 +312,9 @@ func HandleAdminSettings(configPath string, auth *DashboardAuth) http.HandlerFun
 			}
 			if body.AgentModelCache != nil {
 				nextConfig.ModelCacheSeconds = *body.AgentModelCache
+			}
+			if body.AgentMinInterval != nil {
+				nextConfig.MinRequestIntervalSeconds = *body.AgentMinInterval
 			}
 			if err := validateEnhancedConfig(nextConfig); err != nil {
 				w.WriteHeader(http.StatusBadRequest)
@@ -369,7 +373,7 @@ func HandleAdminSettings(configPath string, auth *DashboardAuth) http.HandlerFun
 				}
 			}
 
-			if body.DefaultProtocol != nil || body.AgentEnabled != nil || body.AgentTimeout != nil || body.AgentPollInterval != nil || body.AgentModelCache != nil {
+			if body.DefaultProtocol != nil || body.AgentEnabled != nil || body.AgentTimeout != nil || body.AgentPollInterval != nil || body.AgentModelCache != nil || body.AgentMinInterval != nil {
 				enhancedConfigMu.Lock()
 				AppConfig.AgentV3 = nextConfig.AgentV3Config
 				AppConfig.Proxy.DefaultProtocol = nextConfig.DefaultProtocol
@@ -424,6 +428,7 @@ func persistSearchSettings(configPath string) {
 		setYAMLInt(agentNode, "timeout_seconds", enhanced.TimeoutSeconds)
 		setYAMLInt(agentNode, "poll_interval_ms", enhanced.PollIntervalMS)
 		setYAMLInt(agentNode, "model_cache_seconds", enhanced.ModelCacheSeconds)
+		setYAMLInt(agentNode, "min_request_interval_seconds", enhanced.MinRequestIntervalSeconds)
 		serverNode := getOrCreateYAMLMapping(mapping, "server")
 		setYAMLBool(serverNode, "debug_logging", AppConfig.Server.DebugLogging)
 	}

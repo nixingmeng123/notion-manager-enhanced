@@ -96,7 +96,7 @@ func TestAgentV3RevisionSafeCompletion(t *testing.T) {
 		if done {
 			doneCalls++
 		}
-	})
+	}, CallOptions{ReasoningEffort: "medium"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -174,6 +174,7 @@ func TestAgentV3HTTPFailureClassificationAndRedaction(t *testing.T) {
 		{401, `{"message":"token_v2=secret"}`, "authentication"},
 		{403, `{"message":"Authorization: Bearer secret"}`, "model_permission"},
 		{403, `{"code":"quota_exhausted"}`, "quota"},
+		{400, `{"name":"RateLimited","message":"token_v2=secret"}`, "rate_limit"},
 		{429, `{}`, "rate_limit"}, {500, `{}`, "upstream_error"}, {504, `{}`, "timeout"},
 	}
 	for _, tc := range cases {
@@ -185,6 +186,17 @@ func TestAgentV3HTTPFailureClassificationAndRedaction(t *testing.T) {
 		acc.recordAgentResult(AgentModel{Slug: "albuquerque-quinn"}, err)
 		if acc.PermanentlyExhausted || acc.QuotaExhaustedAt != nil {
 			t.Fatal("Agent failure changed Workflow quota")
+		}
+	}
+	for _, endpoint := range []string{"createAgentThread", "getThreadTranscript", "token_v2=secret"} {
+		err := classifyAgentHTTPError(400, []byte(`{"message":"Authorization: Bearer secret"}`), endpoint)
+		if err.Status != 502 || !strings.Contains(err.Message, "upstream HTTP 400") || strings.Contains(err.Message, "secret") {
+			t.Fatalf("unsafe or missing HTTP context: %+v", err)
+		}
+		if endpoint == "createAgentThread" || endpoint == "getThreadTranscript" {
+			if !strings.Contains(err.Message, endpoint) {
+				t.Fatal("missing operation context")
+			}
 		}
 	}
 	redacted := redactSensitiveText(`{"token_v2":"secret-token","full_cookie":"secret-cookie","Authorization":"Bearer secret-auth"}` + "\nAPI Key: secret-key")

@@ -39,11 +39,14 @@ agent_v3:
   timeout_seconds: 300
   poll_interval_ms: 3000
   model_cache_seconds: 300
+  min_request_interval_seconds: 15
 proxy:
   default_protocol: workflow
 ```
 
-可用环境变量：`HOST`、`PORT`、`AGENT_V3_ENABLED`、`DEFAULT_PROTOCOL`、`AGENT_TIMEOUT_SECONDS`、`AGENT_POLL_INTERVAL_MS`、`AGENT_MODEL_CACHE_SECONDS`。Agent 默认关闭。超时范围 1–1800 秒，轮询范围 100–30000 毫秒，模型缓存范围 1–86400 秒。设置默认 Agent 前必须启用 Agent。
+可用环境变量：`HOST`、`PORT`、`AGENT_V3_ENABLED`、`DEFAULT_PROTOCOL`、`AGENT_TIMEOUT_SECONDS`、`AGENT_POLL_INTERVAL_MS`、`AGENT_MODEL_CACHE_SECONDS`、`AGENT_MIN_REQUEST_INTERVAL_SECONDS`。Agent 默认关闭。超时范围 1–1800 秒，轮询范围 100–30000 毫秒，模型缓存范围 1–86400 秒，账号起始间隔范围 0–300 秒。设置默认 Agent 前必须启用 Agent。
+
+原始默认配置的起始间隔为 0；示例配置及本地启动脚本使用 15 秒。网关按同一账号的上次创建请求时间等待，其他账号和 Workflow 不受这个等待影响。取消的等待不会占用未来时段，上次起始时间保存在既有账号 JSON 中。此设置是实测的缓解策略，不代表官方限额，也不替代上游额度、认证或审批检查。
 
 ## 路由与模型身份
 
@@ -61,7 +64,7 @@ proxy:
 
 未知模型返回 404；未知协议返回 400，不做模糊型号降级。请求开始后协议被固定，后台改默认协议不会把已开始的 Workflow 请求改送到 Agent。
 
-Agent 创建后必须检查 `thread.data.agent_provider.model`。上游选了其他模型时返回 403，不以原请求名称伪装成功；无法得到实际模型 ID 时返回 502。推理强度若被上游替换，也返回明确错误。这里验证的是 Notion 返回的运行时模型 ID，厂商名称仍采用参考项目的候选映射。
+Agent 创建后必须检查 `thread.data.agent_provider.model`。上游选了其他模型时返回 403，不以原请求名称伪装成功；无法得到实际模型 ID 时返回 502。明确指定的推理强度若被替换，也返回明确错误；未指定时不强制默认 medium，记录上游实际强度。这里验证的是 Notion 返回的运行时模型 ID，厂商名称仍采用参考项目的候选映射。
 
 ## 账号、目录与状态
 
@@ -128,7 +131,9 @@ Agent 使用现有格式注入工具桥接，严格检查模型生成的工具�
 
 本机详细报告在 Git 忽略的 `.local-runtime/live-model-identities.json`。公开文档仅保留模型、策略和测试结果，不包含账号标识或凭据。
 
-三种 API 的 JSON，以及 Messages、Chat Completions 的 SSE 已在该账号成功返回 `API_OK`。最近一轮 Responses SSE 和工具请求被上游拒绝；随后单独复查 Opus 推理成功。这两项尚无真实成功复测证据，不能据此宣称全部真实 API/工具链已通过。发布测试记录见 [RELEASE_NOTES.md](../RELEASE_NOTES.md)。
+2026-10-09 的完整测试曾在 Responses SSE 和工具请求收到上游拒绝。2026-10-12 复查确认拒绝来自 `createAgentThread` 的 HTTP 400 / `UserValidationError`，没有明确的额度或限频标识。配置 15 秒账号起始间隔后，最终修复版在客户端不加延时的情况下通过全部八项：三种 API 的 JSON/SSE、强制工具调用及工具结果历史。客户端收到正确结束事件，工具结果返回 `42`。
+
+排查中也曾出现普通 Responses JSON 的一次上游拒绝，因此本结果仅证明该账号本轮通过，不能承诺上游不再出现间歇性错误。详细记录见 [RELEASE_NOTES.md](../RELEASE_NOTES.md)。错误中保留允许列举的接口名称和 HTTP 状态，省略原始错误内容；不会自动重放创建请求。
 
 ## 验证方法
 
@@ -142,4 +147,4 @@ npm run build --prefix web
 
 离线测试覆盖：三种 API 的 JSON/SSE、认证、模型替换拒绝、实际完成标记、文本修订及 Unicode、稳定 idle 不能完成、取消和超时、错误分类、模型缓存失效、强度校验、协议额度隔离、轮换、多工具调用及历史 ID、审批和分页拒绝、账号并发保存、设置持久化和凭据脱敏。
 
-实时 Go 测试需显式设置 `NOTION_LIVE_ACCOUNT_FILE`；默认跳过。模型身份矩阵还需 `NOTION_LIVE_MODEL_MATRIX=1`，可设置 `NOTION_LIVE_REPORT_FILE` 输出脱敏报告。测试仅创建合成消息，不批准操作。Windows 的 race detector 需要足够新的 MinGW-w64 运行库；本次使用校验过 SHA-256 的 w64devkit 2.10.0。POSIX 0600 位的测试在 Windows 跳过，不能将其视为 Windows ACL 已验证。
+实时 Go 测试需显式设置 `NOTION_LIVE_ACCOUNT_FILE`；默认跳过。模型身份矩阵还需 `NOTION_LIVE_MODEL_MATRIX=1`，可设置 `NOTION_LIVE_REPORT_FILE` 输出脱敏报告。重复推理诊断可设 `NOTION_LIVE_AGENT_REPETITIONS=1..8`；六种 API 诊断可设 `NOTION_LIVE_API_SEQUENCE=1` 及 `NOTION_LIVE_MIN_REQUEST_INTERVAL_SECONDS=15`。测试仅创建合成消息，不批准操作。Windows 的 race detector 需要足够新的 MinGW-w64 运行库；本次使用校验过 SHA-256 的 w64devkit 2.10.0。POSIX 0600 位的测试在 Windows 跳过，不能将其视为 Windows ACL 已验证。

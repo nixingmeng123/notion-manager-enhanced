@@ -15,8 +15,9 @@ export function AgentPanel({ settings, data, onSaved, onRefresh }: {
   const [busy, setBusy] = useState(false)
   const [timeout, setTimeoutValue] = useState(settings.agent_timeout_seconds)
   const [poll, setPoll] = useState(settings.agent_poll_interval_ms)
+  const [interval, setIntervalValue] = useState(settings.agent_min_request_interval_seconds ?? 0)
   const [showModels, setShowModels] = useState(false)
-  useEffect(() => { setTimeoutValue(settings.agent_timeout_seconds); setPoll(settings.agent_poll_interval_ms) }, [settings])
+  useEffect(() => { setTimeoutValue(settings.agent_timeout_seconds); setPoll(settings.agent_poll_interval_ms); setIntervalValue(settings.agent_min_request_interval_seconds ?? 0) }, [settings])
   const save = async (values: Parameters<typeof updateSettings>[0]) => {
     setBusy(true)
     setError('')
@@ -61,6 +62,12 @@ export function AgentPanel({ settings, data, onSaved, onRefresh }: {
             onChange={e => setPoll(Number(e.target.value))} onBlur={() => poll !== settings.agent_poll_interval_ms && save({ agent_poll_interval_ms: poll })} disabled={busy} />
         </label>
       </div>
+      <label className="flex gap-2 items-center text-text-secondary mt-3">
+        {t('agent.interval')}
+        <input aria-label={t('agent.interval')} className="w-20 bg-bg-secondary rounded px-2 py-1 text-text-primary" type="number" min="0" max="300" value={interval}
+          onChange={e => setIntervalValue(Number(e.target.value))} onBlur={() => interval !== settings.agent_min_request_interval_seconds && save({ agent_min_request_interval_seconds: interval })} disabled={busy} />
+        <span className="text-text-muted">{t('agent.interval_hint')}</span>
+      </label>
       <p className="mt-3 text-text-muted">{t('agent.modes')}</p>
       <div className="flex flex-wrap gap-4 items-center mt-3 text-text-secondary">
         <span>{t('agent.requests')}: {data?.agent_stats?.requests ?? 0}</span>
