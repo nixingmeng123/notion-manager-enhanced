@@ -225,6 +225,32 @@ func refreshAgentModels(ctx context.Context, acc *Account) error {
 		}
 	}
 	acc.updateAgentCapability(func(c *AgentCapability) {
+		// An empty/restricted catalog does not revoke a completed inference.
+		// Preserve its runtime identity evidence unless the catalog explicitly
+		// denies that model. Otherwise every refresh erases client discovery.
+		previous := make(map[string]AgentModelAuthorization, len(c.Models))
+		for _, model := range c.Models {
+			previous[model.Slug] = model
+		}
+		for i := range found {
+			old, exists := previous[found[i].Slug]
+			if !exists {
+				continue
+			}
+			found[i].ActualSlug = old.ActualSlug
+			found[i].ActualEffort = old.ActualEffort
+			found[i].ModelSelection = old.ModelSelection
+			found[i].ModelCheckedAt = old.ModelCheckedAt
+			if found[i].Authorization != "denied" && old.Authorization == "confirmed" && old.ActualSlug == old.Slug {
+				found[i].Authorization = "confirmed"
+			}
+			delete(previous, found[i].Slug)
+		}
+		for _, old := range previous {
+			if old.Authorization == "confirmed" && old.ActualSlug == old.Slug {
+				found = append(found, old)
+			}
+		}
 		c.Models = found
 		c.CheckedAt = time.Now()
 		c.Source = "getAvailableModels"

@@ -49,7 +49,8 @@ func (r *liveTraceTransport) RoundTrip(req *http.Request) (*http.Response, error
 			if reader, err := req.GetBody(); err == nil {
 				var payload map[string]json.RawMessage
 				if json.NewDecoder(reader).Decode(&payload) == nil {
-					// Synthetic prompts only. Omit account and generated IDs.
+					// Opt-in diagnostic prompts only. Keep traces local and omit
+					// account and generated IDs.
 					delete(payload, "spaceId")
 					delete(payload, "threadId")
 					delete(payload, "clientMessageId")

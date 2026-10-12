@@ -66,7 +66,7 @@ func TestHandlePublicModels_UsesPoolModelsAndNormalizesIDs(t *testing.T) {
 	}
 }
 
-func TestHandlePublicModels_FallsBackToDefaultModelMap(t *testing.T) {
+func TestHandlePublicModels_DoesNotAdvertiseStaticFallback(t *testing.T) {
 	original := SnapshotModelMap()
 	ReplaceModelMap(map[string]string{
 		"gemini-2.5-flash": "vertex-gemini-2.5-flash",
@@ -96,9 +96,8 @@ func TestHandlePublicModels_FallsBackToDefaultModelMap(t *testing.T) {
 		gotIDs = append(gotIDs, item.ID)
 	}
 
-	wantIDs := []string{"gemini-2.5-flash", "sonnet-4.6"}
-	if !reflect.DeepEqual(gotIDs, wantIDs) {
-		t.Fatalf("unexpected fallback models: got %v want %v", gotIDs, wantIDs)
+	if len(gotIDs) != 0 || resp.Data == nil {
+		t.Fatalf("empty account pool advertised static mappings or null data: %+v", resp)
 	}
 }
 

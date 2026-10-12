@@ -11,6 +11,8 @@ import (
 	"strings"
 	"time"
 	"unicode/utf8"
+
+	jsonpatch "github.com/evanphx/json-patch/v5"
 )
 
 // Production uses the existing proxy-aware Chrome TLS transport. Tests replace
@@ -136,12 +138,25 @@ type agentEntity struct {
 	Content    []agentTextBlock `json:"content"`
 	Source     string           `json:"source"`
 	StopReason string           `json:"stop_reason"`
+	raw        json.RawMessage
+}
+
+func (e *agentEntity) UnmarshalJSON(data []byte) error {
+	type plainEntity agentEntity
+	var decoded plainEntity
+	if err := json.Unmarshal(data, &decoded); err != nil {
+		return err
+	}
+	*e = agentEntity(decoded)
+	e.raw = append(json.RawMessage(nil), data...)
+	return nil
 }
 
 type agentTranscriptPatch struct {
-	Op      string       `json:"op"`
-	ID      string       `json:"id"`
-	Entity  *agentEntity `json:"entity"`
+	Op      string          `json:"op"`
+	ID      string          `json:"id"`
+	Entity  *agentEntity    `json:"entity"`
+	Ops     json.RawMessage `json:"ops"`
 	Session *struct {
 		Status string `json:"status"`
 	} `json:"session"`
@@ -162,6 +177,105 @@ type agentTranscriptState struct {
 	revisions     int
 	status        string
 	turnCompleted bool
+	documents     map[string]json.RawMessage
+	documentBytes int
+}
+
+func (s *agentTranscriptState) removeEntity(id string) {
+	s.removeAssistantText(id)
+	s.documentBytes -= len(s.documents[id])
+	delete(s.documents, id)
+}
+
+func (s *agentTranscriptState) removeAssistantText(id string) {
+	delete(s.entities, id)
+	order := s.order[:0]
+	for _, existing := range s.order {
+		if existing != id {
+			order = append(order, existing)
+		}
+	}
+	s.order = order
+}
+
+func (s *agentTranscriptState) putEntity(entity *agentEntity, patchID string, ordinal int) error {
+	id := entity.ID
+	if id == "" {
+		id = patchID
+	}
+	if id == "" && entity.Kind == "assistant_message" {
+		id = "snapshot-" + strconv.Itoa(ordinal)
+	}
+	if id != "" {
+		data := entity.raw
+		if len(data) == 0 {
+			data, _ = json.Marshal(entity)
+		}
+		size := s.documentBytes - len(s.documents[id]) + len(data)
+		if size > agentMaxResponseBytes {
+			return gatewayError("transcript_parse", 502, "Agent transcript entity state exceeds the size limit", false)
+		}
+		s.documents[id], s.documentBytes = data, size
+	}
+	if entity.Kind != "assistant_message" {
+		s.removeAssistantText(id)
+	}
+	switch entity.Kind {
+	case "approval", "approval_request":
+		return gatewayError("approval_required", 409, "Agent requires user approval in Notion; no operation was approved by the gateway", false)
+	case "turn_failed", "turn_error":
+		return gatewayError("upstream_error", 502, "Agent turn failed", true)
+	case "turn_completed":
+		if entity.Source == "committed" {
+			if entity.StopReason != "end_turn" {
+				return gatewayError("unsupported_capability", 502, "Agent returned an unsupported turn completion reason", false)
+			}
+			s.turnCompleted = true
+		}
+		return nil
+	}
+	if entity.Kind != "assistant_message" {
+		// Tool results and thinking are transcript state, never assistant text.
+		return nil
+	}
+	var blocks []string
+	for _, block := range entity.Content {
+		if block.Type != "text" {
+			continue
+		}
+		text, err := agentPlainText(block.Text)
+		if err != nil {
+			return err
+		}
+		blocks = append(blocks, text)
+	}
+	if _, exists := s.entities[id]; !exists {
+		s.order = append(s.order, id)
+	}
+	s.entities[id] = strings.Join(blocks, "\n")
+	return nil
+}
+
+func (s *agentTranscriptState) patchedEntity(patch agentTranscriptPatch) (*agentEntity, error) {
+	data, exists := s.documents[patch.ID]
+	ops := bytes.TrimSpace(patch.Ops)
+	if patch.ID == "" || !exists || len(ops) == 0 || ops[0] != '[' {
+		return nil, gatewayError("transcript_parse", 502, "Agent entity patch is missing its target or operations", false)
+	}
+	operations, err := jsonpatch.DecodePatch(patch.Ops)
+	if err != nil || len(operations) > 1024 {
+		return nil, gatewayError("transcript_parse", 502, "Agent entity patch has invalid operations", false)
+	}
+	options := &jsonpatch.ApplyOptions{SupportNegativeIndices: false, AccumulatedCopySizeLimit: agentMaxResponseBytes}
+	updated, err := operations.ApplyWithOptions(data, options)
+	if err != nil || len(updated) > agentMaxResponseBytes || !utf8.Valid(updated) {
+		return nil, gatewayError("transcript_parse", 502, "Agent entity patch could not be applied", false)
+	}
+	var entity agentEntity
+	if json.Unmarshal(updated, &entity) != nil || entity.ID != patch.ID || entity.Kind == "" {
+		return nil, gatewayError("transcript_parse", 502, "Agent entity patch produced an invalid entity", false)
+	}
+	return &entity, nil
 }
 
 // Agent text blocks are strings in the observed transcript. Some Notion rich
@@ -209,6 +323,9 @@ func (s *agentTranscriptState) apply(response agentTranscriptResponse) (string, 
 	if s.entities == nil {
 		s.entities = make(map[string]string)
 	}
+	if s.documents == nil {
+		s.documents = make(map[string]json.RawMessage)
+	}
 	// Anonymous entities are complete snapshots in the reference protocol.
 	// Reset only this snapshot namespace; keyed incremental entities survive.
 	anonymousSnapshot := false
@@ -222,6 +339,8 @@ func (s *agentTranscriptState) apply(response agentTranscriptResponse) (string, 
 		for _, id := range s.order {
 			if strings.HasPrefix(id, "snapshot-") {
 				delete(s.entities, id)
+				s.documentBytes -= len(s.documents[id])
+				delete(s.documents, id)
 			} else {
 				order = append(order, id)
 			}
@@ -239,59 +358,30 @@ func (s *agentTranscriptState) apply(response agentTranscriptResponse) (string, 
 				return "", false, gatewayError("transcript_parse", 502, "Agent session patch is missing session data", false)
 			}
 			s.status = strings.ToLower(patch.Session.Status)
-		case "put":
-			if patch.Entity == nil {
-				return "", false, gatewayError("transcript_parse", 502, "Agent put patch is missing entity data", false)
-			}
-			switch patch.Entity.Kind {
-			case "approval", "approval_request":
-				return "", false, gatewayError("approval_required", 409, "Agent requires user approval in Notion; no operation was approved by the gateway", false)
-			case "turn_failed", "turn_error":
-				return "", false, gatewayError("upstream_error", 502, "Agent turn failed", true)
-			case "turn_completed":
-				if patch.Entity.Source != "committed" {
-					continue
-				}
-				if patch.Entity.StopReason != "end_turn" {
-					return "", false, gatewayError("unsupported_capability", 502, "Agent returned an unsupported turn completion reason", false)
-				}
-				s.turnCompleted = true
-				continue
-			}
-			if patch.Entity.Kind != "assistant_message" {
-				continue
-			}
-			ordinal++
-			var blocks []string
-			for _, block := range patch.Entity.Content {
-				if block.Type != "text" {
-					continue
-				}
-				text, err := agentPlainText(block.Text)
+		case "put", "patch":
+			entity := patch.Entity
+			if patch.Op == "patch" {
+				var err error
+				entity, err = s.patchedEntity(patch)
 				if err != nil {
 					return "", false, err
 				}
-				blocks = append(blocks, text)
 			}
-			id := patch.Entity.ID
-			if id == "" {
-				id = patch.ID
+			if entity == nil {
+				return "", false, gatewayError("transcript_parse", 502, "Agent put patch is missing entity data", false)
 			}
-			if id == "" {
-				// The reference transcript omits IDs. In that format each poll
-				// is a complete snapshot, never an append-only event stream.
-				id = "snapshot-" + strconv.Itoa(ordinal)
+			if entity.Kind == "assistant_message" {
+				ordinal++
 			}
-			if _, exists := s.entities[id]; !exists {
-				s.order = append(s.order, id)
+			if err := s.putEntity(entity, patch.ID, ordinal); err != nil {
+				return "", false, err
 			}
-			s.entities[id] = strings.Join(blocks, "\n")
 		case "delete", "remove":
 			id := patch.ID
 			if patch.Entity != nil && patch.Entity.ID != "" {
 				id = patch.Entity.ID
 			}
-			delete(s.entities, id)
+			s.removeEntity(id)
 		case "approval", "approval_request":
 			return "", false, gatewayError("approval_required", 409, "Agent requires user approval in Notion; no operation was approved by the gateway", false)
 		default:
@@ -385,13 +475,19 @@ func CallAgentInference(acc *Account, messages []ChatMessage, name string, disab
 		effort = ""
 	}
 	threadID := generateUUIDv4()
+	history := buildAgentHistoryReplay(messages)
+	if len(opt.AgentTools) == 0 {
+		history += "\n\nAPI client delivery format: This client receives assistant text only and cannot open Notion session-file:// embeds or files in your sandbox. When the user asks for HTML, SVG, CSS, JavaScript, or other source code, include the complete requested source in fenced code blocks in your final assistant message. A file link or embed alone does not deliver the requested code to this client. For other questions, answer normally in text."
+	}
 	payload := agentCreateRequest{
 		Type: "personal_agent", SpaceID: acc.SpaceID, ThreadID: threadID, Model: model.Slug,
 		ReasoningEffort: effort, CreatedSource: "full_page_chat", ClientMessageID: generateUUIDv4(),
-		Content:                   []agentTextBlock{{Type: "text", Text: [][]string{{buildAgentHistoryReplay(messages)}}}},
-		AgentMemorySettings:       map[string]bool{"useMemories": false, "excludeChatFromMemories": true},
-		Policies:                  map[string]string{"approval_mode": "review_for_me"},
-		BrowserEnabled:            opt.EnableWebSearch && !disableBuiltinTools,
+		Content:             []agentTextBlock{{Type: "text", Text: [][]string{{history}}}},
+		AgentMemorySettings: map[string]bool{"useMemories": false, "excludeChatFromMemories": true},
+		Policies:            map[string]string{"approval_mode": "review_for_me"},
+		// The Workflow prompt toggle does not control Agent browser access.
+		// The Agent search setting/header is authoritative for this capability.
+		BrowserEnabled:            opt.EnableWebSearch,
 		EnableSuggestedEditsTools: false,
 	}
 	var created map[string]interface{}

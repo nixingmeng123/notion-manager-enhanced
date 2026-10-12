@@ -27,8 +27,10 @@ The startup script uses a 15-second request start interval per account. After up
 - **Existing account access and local management**: import an account, view its workspace and model status, and sign in with a separate dashboard password.
 - **Protocol routing**: `agent/` selects Personal Agent V3; `workflow/` selects Workflow. Unprefixed names use Workflow by default.
 - **Runtime model verification**: check the model ID returned by Notion and return an error if the upstream selects a different model.
+- **Client model discovery**: return account catalog Workflow models and identity-verified Agent models; omit static candidates and duplicate names.
 - **Conversation and response handling**: full history replay, JSON responses, polling with buffered SSE, and conversion of tool calls and tool-result history.
 - **Request controls**: timeout, cancellation and per-account request spacing. Explicit reasoning effort is checked against the upstream response.
+- **Web search**: Agent uses Notion's native browsing tools when allowed by the dashboard setting or `X-Web-Search` header. Tool results establish whether a search actually occurred.
 - **Dashboard settings**: Agent enablement, default protocol, timeout, polling interval and request interval.
 
 ## Client requests

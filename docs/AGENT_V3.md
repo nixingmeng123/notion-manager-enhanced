@@ -60,7 +60,7 @@ proxy:
 | `workflow/opus-4.6` | Workflow | 原有映射 `avocado-froyo-medium` |
 | `opus-4.6` | 默认 Workflow | 原有映射 |
 
-`POST /v1/messages`、`POST /v1/chat/completions`、`POST /v1/responses` 支持 JSON 与 SSE。`GET /v1/models` 保留原有模型 ID，并提供协议、内部 ID、推理强度来源及权限字段。原有 API Key 与面板会话认证保留。
+`POST /v1/messages`、`POST /v1/chat/completions`、`POST /v1/responses` 支持 JSON 与 SSE。`GET /v1/models` 只返回账号实际目录中的 Workflow 模型，以及完成推理且实际 ID 一致的 Agent 模型，不再用静态默认表补充模型。每个 Workflow 模型只列出一个名称；默认协议为 Agent 时使用 `workflow/` 前缀，避免错误路由。Agent 保留 `agent/` 前缀。原有 API Key 与面板会话认证保留。
 
 未知模型返回 404；未知协议返回 400，不做模糊型号降级。请求开始后协议被固定，后台改默认协议不会把已开始的 Workflow 请求改送到 Agent。
 
@@ -79,7 +79,9 @@ Agent 使用原有 `AccountPool` 和账号 JSON 文件，新增 `agent_capabilit
 
 API 目录中没有出现候选模型，不直接等同于拒绝。客户端明确选择一个未被禁用的候选模型时，可通过正常的创建请求验证；Notion 后端的认证、套餐和模型选择限制继续生效。没有调整上游策略或跳过审批的请求。
 
-管理面板沿用原有设计，增加启用开关、默认协议、超时、轮询间隔、失败统计，以及每账号的实际返回模型。`available=true` 仅用于有效缓存内实际推理确认的 Agent 模型；刷新后需重新确认。
+管理面板的诊断列表保留候选映射和缓存状态。客户端模型列表不会返回未确认的候选、明确被拒绝的模型或处于冷却期的账号模型。它保留此前完成且 ID 一致的确认记录，避免目录缓存过期导致已确认模型从客户端消失；每次调用仍核对 Notion 权限和实际模型 ID。空或受限目录不撤销此前的实测记录，目录明确拒绝会撤销确认。
+
+首次导入时如果客户端目录为空，可手动添加该账号已开放的模型名并完成一次调用，再重新拉取模型列表。静态候选只用于请求解析，不是账号授权或可用性证据。
 
 ## Transcript 与会话模式
 
@@ -87,9 +89,11 @@ API 目录中没有出现候选模型，不直接等同于拒绝。客户端明�
 
 - `committed` 是序号确认，可忽略其文本输出。
 - `put` 中的 `assistant_message` 提供文本；按实体 ID 覆盖修订并去重。
+- `patch` 的 `ops` 使用 [RFC 6902 JSON Patch](https://www.rfc-editor.org/rfc/rfc6902) 更新已知实体，包括原生工具结果和助手内容修订。工具结果和 thinking 不作为助手正文输出；补丁不会单独标记推理完成。缺少目标、非法路径或未知操作明确报错。
 - `remove/delete` 删除相应实体。
 - `source=committed` 的 `turn_completed` 且 `stop_reason=end_turn` 是真实完成标记。
 - `idle`、文本暂时不变或空轮询，单独都不是完成证据。
+
 - 未知补丁、无效 JSON、响应过大或存在未支持的分页会返回明确错误。
 
 对于可修改的累计文本，以 UTF-8 安全的公共前缀检测修订，并缓冲到确定完成后再发 SSE 文本块。模式公开标记为 `polling-buffered`，不是上游 Token Streaming。该选择避免客户端收到后来无法撤销的错误文本。请求取消和超时会停止 HTTP 请求、轮询及本地输出，不宣称已取消 Notion 上游任务。
@@ -106,6 +110,16 @@ X-Notion-Usage: unavailable
 ```
 
 没有验证到上游 Token 计数；不将估算值写入实际 Token 统计。兼容 API 中的零值用量字段是占位，不能解释为已知的零消耗。
+
+普通文本请求会说明客户端无法打开 Notion 的 `session-file://` 附件，要求代码交付包含完整源代码，避免只有内部附件链接。带客户端工具定义的请求继续使用既有 JSON 工具桥接格式。
+
+## 联网搜索
+
+Agent 的 `browserEnabled` 来自管理面板的 `enable_web_search` 设置，也可通过请求头 `X-Web-Search: true/false` 覆盖。它独立于 Workflow 的 `disable_notion_prompt` 设置。启用只表示允许上游使用浏览器或网页检索工具，实际是否检索以 transcript 中的工具结果为准。
+
+2026-10-12 复现 Cherry 请求时，实际观察到原生工具结果通过 `patch` 写入实体；天气请求的工具结果包含公开天气来源链接。此前网关在解析该补丁时返回 502，并不能据此认定账号不支持联网。补充解析后，原样多轮 SVG 请求和天气检索请求均返回 HTTP 200 及完整的 `response.completed` 结束事件。
+
+最终本地程序验证：`/v1/models` 只返回已确认的 `agent/opus-5.5`；原样多轮 SVG 请求返回包含 SVG 的完整代码，约 123 秒完成。通过正在运行的本地 `/v1/responses` 实测“联网查询上海天气并生成 HTML 卡片”，约 30 秒返回 HTTP 200，包含完整 HTML、来源链接和结束事件。未创建或修改 Notion 页面。全量 `go test -race ./...` 与 `go vet ./...` 通过。
 
 ## 工具桥接与限制
 

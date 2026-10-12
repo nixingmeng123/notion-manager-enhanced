@@ -5,6 +5,7 @@ go 1.26
 require (
 	github.com/andybalholm/brotli v1.0.6
 	github.com/emersion/go-imap/v2 v2.0.0-beta.8
+	github.com/evanphx/json-patch/v5 v5.9.11
 	github.com/klauspost/compress v1.17.11
 	github.com/refraction-networking/utls v1.8.2
 	golang.org/x/net v0.52.0

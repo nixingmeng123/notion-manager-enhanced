@@ -72,6 +72,61 @@ func buildEnhancedModels(pool *AccountPool, includeDisabled bool) []publicModel 
 	return result
 }
 
+// Client pickers commonly ignore availability metadata. Keep diagnostic
+// candidates in the dashboard and expose only account catalog entries or
+// completed, identity-verified Agent inferences here. Never use static fallback
+// mappings to populate the client list.
+func buildClientModels(pool *AccountPool) []publicModel {
+	config := enhancedConfigSnapshot()
+	accounts := pool.AccountsSnapshot()
+	var workflowEntries []ModelEntry
+	confirmed := make(map[string]AgentModelAuthorization)
+	for _, account := range accounts {
+		if !pool.isUnusable(account) {
+			workflowEntries = append(workflowEntries, account.modelsSnapshot()...)
+		}
+		capability := account.agentSnapshot()
+		if !config.Enabled || account.SpaceID == "" || account.UserID == "" || (account.TokenV2 == "" && account.FullCookie == "") || pool.hasNoWorkspace(account) || time.Now().Before(capability.CooldownUntil) {
+			continue
+		}
+		for _, model := range capability.Models {
+			if model.Authorization == "confirmed" && model.ActualSlug == model.Slug {
+				confirmed[model.Slug] = model
+			}
+		}
+	}
+	result := make([]publicModel, 0, len(workflowEntries)+len(confirmed))
+	for _, model := range buildPublicModels(workflowEntries) {
+		model.Protocol = "workflow"
+		model.InternalSlug = ResolveModel(model.ID)
+		model.Authorization = "workflow_catalog"
+		model.Available = true
+		if config.DefaultProtocol == "agent" {
+			model.ID = "workflow/" + model.ID
+		}
+		result = append(result, model)
+	}
+	seenAgent := make(map[string]bool)
+	for _, candidate := range agentModelsSnapshot() {
+		verified, ok := confirmed[candidate.Slug]
+		if !ok || seenAgent[candidate.Slug] {
+			continue
+		}
+		seenAgent[candidate.Slug] = true
+		model := publicModel{ID: agentAlias(candidate), Object: "model", Created: publicModelCreatedAt, OwnedBy: "notion-manager",
+			Protocol: "agent", InternalSlug: candidate.Slug, Available: true, Authorization: "confirmed",
+			AuthorizationScope: "runtime_inference", SessionMode: "history-replay", StreamingMode: "polling-buffered",
+			ReasoningEfforts: candidate.Efforts, ReasoningSource: "candidate_registry"}
+		if verified.EffortsDiscovered {
+			model.ReasoningEfforts = verified.Efforts
+			model.ReasoningSource = "getAvailableModels"
+		}
+		result = append(result, model)
+	}
+	sort.Slice(result, func(i, j int) bool { return result[i].ID < result[j].ID })
+	return result
+}
+
 func (p *AccountPool) agentStats() map[string]interface{} {
 	requests := 0
 	failures := make(map[string]int)

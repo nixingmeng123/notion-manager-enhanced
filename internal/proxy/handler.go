@@ -72,7 +72,7 @@ func HandlePublicModels(pool *AccountPool) http.HandlerFunc {
 
 		resp := publicModelResponse{
 			Object: "list",
-			Data:   buildEnhancedModels(pool, false),
+			Data:   buildClientModels(pool),
 		}
 		json.NewEncoder(w).Encode(resp)
 	}
