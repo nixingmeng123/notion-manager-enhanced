@@ -315,15 +315,16 @@ func selectAgentEffort(allowed []string, effort string) (string, error) {
 	return "", gatewayError("unsupported_effort", 400, "reasoning effort is not supported by this Agent model", false)
 }
 
-func (p *AccountPool) NextAgentExcluding(excluded map[*Account]bool) *Account {
-	// Shared account inventory, independent protocol availability.
-	accounts := p.AccountsSnapshot()
-	if len(accounts) == 0 {
-		return nil
+func (p *AccountPool) NextAgentExcluding(excluded map[*Account]bool, modelNames ...string) *Account {
+	// Prefer the same per-model identity evidence used by /v1/models. A
+	// successful account must not make an unverified account appear usable
+	// merely because both accounts are members of the same shared pool.
+	var requested AgentModel
+	if len(modelNames) > 0 {
+		requested, _ = lookupAgentModel(strings.TrimPrefix(modelNames[0], "agent/"))
 	}
-	start := p.agentIndex.Add(1) - 1
-	for i := range accounts {
-		acc := accounts[(start+uint64(i))%uint64(len(accounts))]
+	var eligible, verified []*Account
+	for _, acc := range p.AccountsSnapshot() {
 		if excluded[acc] || acc.SpaceID == "" {
 			continue
 		}
@@ -334,9 +335,24 @@ func (p *AccountPool) NextAgentExcluding(excluded map[*Account]bool) *Account {
 		if time.Now().Before(c.CooldownUntil) {
 			continue
 		}
-		return acc
+		eligible = append(eligible, acc)
+		for _, model := range c.Models {
+			if requested.Slug != "" && model.Slug == requested.Slug && model.Authorization == "confirmed" && model.ActualSlug == model.Slug {
+				verified = append(verified, acc)
+				break
+			}
+		}
 	}
-	return nil
+	if len(verified) > 0 {
+		eligible = verified
+	}
+	if len(eligible) == 0 {
+		return nil
+	}
+	// Round-robin within eligible peers. With no verified identity yet,
+	// preserve explicit candidate probing so a new deployment can bootstrap.
+	start := p.agentIndex.Add(1) - 1
+	return eligible[start%uint64(len(eligible))]
 }
 
 func (acc *Account) recordAgentModelSelection(model AgentModel, actual, effort, selection string) {

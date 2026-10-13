@@ -143,7 +143,7 @@ func handleAgentMessages(w http.ResponseWriter, r *http.Request, pool *AccountPo
 			writeError(ctx.Err())
 			return
 		}
-		acc := pool.NextAgentExcluding(excluded)
+		acc := pool.NextAgentExcluding(excluded, model)
 		if acc == nil {
 			break
 		}

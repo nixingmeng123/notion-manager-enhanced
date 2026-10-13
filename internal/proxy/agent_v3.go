@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"log"
 	"net/http"
 	"strconv"
 	"strings"
@@ -448,7 +449,18 @@ func CallAgentInference(acc *Account, messages []ChatMessage, name string, disab
 	if acc == nil || acc.SpaceID == "" || acc.UserID == "" || (acc.TokenV2 == "" && acc.FullCookie == "") {
 		return gatewayError("authentication", 401, "account credentials and workspace are required", true)
 	}
-	defer func() { acc.recordAgentResult(model, resultErr) }()
+	defer func() {
+		acc.recordAgentResult(model, resultErr)
+		// Distinguish members sharing one workspace without logging credentials,
+		// prompt text or upstream bodies. The prefix matches account filenames.
+		accountID := ComputeAccountID(acc.UserID, acc.SpaceID)[:12]
+		if resultErr == nil {
+			log.Printf("[agent-result] account_id=%s model=%q result=success", accountID, model.Slug)
+		} else {
+			failure := asGatewayError(resultErr)
+			log.Printf("[agent-result] account_id=%s model=%q result=error kind=%s status=%d", accountID, model.Slug, failure.Kind, failure.Status)
+		}
+	}()
 	var opt CallOptions
 	if len(opts) > 0 {
 		opt = opts[0]
