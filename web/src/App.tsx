@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
-import type { DashboardData, AccountInfo, AccountSummary, RefreshStatus, TokenStats } from './types'
+import type { DashboardData, AccountInfo, AccountSummary, RefreshStatus, TokenStats, AIUsageWindow } from './types'
 import { fetchDashboardData, openProxy, openBestProxy, checkAuth, login, logout, triggerRefresh, fetchSettings, updateSettings, addAccount, fetchTokenStats } from './api'
 import type { SearchSettings } from './api'
 import { fmt, formatTokens, getQuotaStatusByUsage, getQuotaPct, avatarColor, avatarLetter, formatCheckedAt, formatTimestampMs, providerDisplay } from './utils'
@@ -322,71 +322,14 @@ function hasPremiumAccess(account: AccountInfo): boolean {
   return !!account.has_premium || (account.premium_limit || 0) > 0 || (account.premium_balance || 0) > 0
 }
 
-function getSpaceQuota(account: AccountInfo) {
-  const usage = account.space_usage ?? account.usage ?? 0
-  const limit = account.space_limit ?? account.limit ?? 0
-  const remaining = account.space_remaining ?? Math.max(limit - usage, 0)
-  return { usage, limit, remaining }
-}
-
-function getUserQuota(account: AccountInfo) {
-  const usage = account.user_usage ?? 0
-  const limit = account.user_limit ?? 0
-  const remaining = account.user_remaining ?? Math.max(limit - usage, 0)
-  return { usage, limit, remaining }
-}
-
-function isSameQuota(a: { usage: number; limit: number }, b: { usage: number; limit: number }): boolean {
-  return a.limit > 0 && a.limit === b.limit && a.usage === b.usage
-}
-
 function isResearchLimited(account: AccountInfo): boolean {
   return !hasPremiumAccess(account) && (account.research_usage ?? 0) >= 3
 }
 
-function mergeQuotaStatus(statuses: Array<'ok' | 'low' | 'exhausted'>): 'ok' | 'low' | 'exhausted' {
-  if (statuses.includes('exhausted')) return 'exhausted'
-  if (statuses.includes('low')) return 'low'
-  return 'ok'
-}
-
-function OverviewBar({ label, usage, limit }: { label: string; usage: number; limit: number }) {
-  const { t } = useTranslation()
-  const pct = getQuotaPct(usage, limit)
-  const remaining = Math.max(limit - usage, 0)
-  const status = getQuotaStatusByUsage(usage, limit)
-  const fillClass = status === 'exhausted' ? 'bg-err opacity-40'
-    : status === 'low' ? 'bg-warn' : 'bg-ok'
-  const numColor = status === 'exhausted' ? 'text-err'
-    : status === 'low' ? 'text-warn' : 'text-text-primary'
-
-  return (
-    <div>
-      <div className="flex justify-between items-center mb-1.5">
-        <span className="text-[10px] text-text-muted uppercase tracking-wider">{label}</span>
-        <span className={`text-[11px] font-semibold tabular-nums ${numColor}`}>
-          {fmt(remaining)} <span className="text-text-muted font-normal">/ {fmt(limit)} {t('stats.remaining')}</span>
-        </span>
-      </div>
-      <div className="h-[2px] bg-white/[.06] rounded-full overflow-hidden">
-        <div className={`h-full rounded-full transition-all duration-500 ${fillClass}`} style={{ width: `${pct}%` }} />
-      </div>
-    </div>
-  )
-}
-
 function TotalQuotaBar({ summary }: { summary?: AccountSummary | null }) {
   const { t } = useTranslation()
-  const totalSpaceUsage = summary?.total_space_usage ?? 0
-  const totalSpaceLimit = summary?.total_space_limit ?? 0
-  const totalUserUsage = summary?.total_user_usage ?? 0
-  const totalUserLimit = summary?.total_user_limit ?? 0
   const totalPremiumBalance = summary?.total_premium_balance ?? 0
   const totalPremiumLimit = summary?.total_premium_limit ?? 0
-  const sameBasicQuota = isSameQuota(
-    { usage: totalSpaceUsage, limit: totalSpaceLimit },
-    { usage: totalUserUsage, limit: totalUserLimit },
-  )
 
   return (
     <div className="mb-5 space-y-3">
@@ -398,16 +341,54 @@ function TotalQuotaBar({ summary }: { summary?: AccountSummary | null }) {
           </span>
         )}
       </div>
-      {sameBasicQuota ? (
-        <OverviewBar label="Basic" usage={totalSpaceUsage} limit={totalSpaceLimit} />
-      ) : (
-        <>
-          <OverviewBar label="Space" usage={totalSpaceUsage} limit={totalSpaceLimit} />
-          <OverviewBar label="User" usage={totalUserUsage} limit={totalUserLimit} />
-        </>
-      )}
+      <p className="text-[11px] text-text-muted leading-relaxed">{t('quota.overview_note', { count: summary?.workspace_count ?? 0 })}</p>
     </div>
   )
+}
+
+function usagePercent(value: number) {
+  return new Intl.NumberFormat(undefined, { maximumFractionDigits: 2 }).format(value)
+}
+
+function AIUsageMeter({ label, window }: { label: string; window: AIUsageWindow }) {
+  const { t, i18n } = useTranslation()
+  const percent = Math.max(0, window.used_percent)
+  const color = percent >= 100 ? 'text-err' : percent >= 80 ? 'text-warn' : 'text-text-primary'
+  return <div className="mb-3">
+    <div className="flex justify-between gap-3 items-center mb-1.5 text-[12px]">
+      <span className="text-text-secondary">{label}</span>
+      <span className={`font-semibold tabular-nums ${color}`}>{t('quota.used_percent', { percent: usagePercent(percent) })}</span>
+    </div>
+    <div className="h-1 bg-white/[.06] rounded-full overflow-hidden">
+      <div className={percent >= 100 ? 'h-full bg-err' : percent >= 80 ? 'h-full bg-warn' : 'h-full bg-ok'} style={{ width: `${Math.min(percent, 100)}%` }} />
+    </div>
+    {window.resets_at_ms != null && window.resets_at_ms > 0 && <div className="mt-1 text-[10px] text-text-muted">{t('quota.resets', { date: new Date(window.resets_at_ms).toLocaleDateString(i18n.language === 'zh' ? 'zh-CN' : 'en-US', { year: 'numeric', month: 'short', day: 'numeric' }) })}</div>}
+  </div>
+}
+
+function AccountQuotaDisplay({ account }: { account: AccountInfo }) {
+  const { t } = useTranslation()
+  const data = account.quota_display
+  const monthly = data?.ai_usage.monthly
+  const credits = data?.member_credits
+  return <div>
+    {monthly ? <AIUsageMeter label={t('quota.monthly')} window={monthly} /> : <div className="text-[12px] text-text-secondary mb-3">{t('quota.monthly')}：{t('quota.unavailable')}</div>}
+    {hasPremiumAccess(account) && <>
+      <QuotaBar label={t('quota.workspace_credits_used')} labelClass="text-[#7eb8ff]" usage={account.premium_usage} limit={account.premium_limit} />
+      <div className="text-[10px] text-text-muted mt-1 mb-2">{t('quota.workspace_remaining', { count: fmt(account.premium_balance ?? 0) })} · {t('quota.shared_note')}</div>
+    </>}
+    {credits?.status === 'available' && credits.used != null && credits.limit != null && <QuotaBar label={t('quota.member_credits_used')} usage={credits.used} limit={credits.limit} />}
+    <details className="text-[10px] text-text-muted mt-2">
+      <summary className="cursor-pointer py-1">{t('quota.details')}</summary>
+      <div className="space-y-2 pt-2">
+        {data?.ai_usage.rolling && <AIUsageMeter label={t('quota.rolling', { window: data.ai_usage.rolling.window ?? '' })} window={data.ai_usage.rolling} />}
+        <div className="leading-relaxed">{t('quota.legacy_note')}</div>
+        <QuotaBar label={t('quota.legacy_space')} usage={account.space_usage} limit={account.space_limit} />
+        <QuotaBar label={t('quota.legacy_user')} usage={account.user_usage} limit={account.user_limit} />
+        {credits?.status !== 'available' && <div>{t('quota.member_unavailable')}</div>}
+      </div>
+    </details>
+  </div>
 }
 
 function QuotaBar({ label, labelClass, usage, limit, status }: { label: string; labelClass?: string; usage?: number; limit?: number; status?: 'ok' | 'low' | 'exhausted' }) {
@@ -451,9 +432,6 @@ function Badge({ children, variant }: { children: React.ReactNode; variant: 'pla
 function AccountCard({ account, onChanged }: { account: AccountInfo; onChanged: () => void }) {
   const { t } = useTranslation()
   const [showModels, setShowModels] = useState(false)
-  const spaceQuota = getSpaceQuota(account)
-  const userQuota = getUserQuota(account)
-  const sameBasicQuota = isSameQuota(spaceQuota, userQuota)
   const premium = hasPremiumAccess(account)
   const researchLimited = isResearchLimited(account)
   const noWorkspace = !!account.no_workspace
@@ -462,10 +440,9 @@ function AccountCard({ account, onChanged }: { account: AccountInfo; onChanged: 
   const isAvailable = account.eligible === true && !account.exhausted && !account.permanent && !noWorkspace
   const status = !isAvailable
     ? 'exhausted'
-    : mergeQuotaStatus([
-      getQuotaStatusByUsage(spaceQuota.usage, spaceQuota.limit),
-      getQuotaStatusByUsage(userQuota.usage, userQuota.limit),
-    ])
+    : account.quota_display?.ai_usage.monthly
+      ? getQuotaStatusByUsage(account.quota_display.ai_usage.monthly.used, account.quota_display.ai_usage.monthly.limit)
+      : 'ok'
   const modelCount = account.models?.length || 0
 
   const dotCls = !isAvailable ? 'bg-err' : status === 'low' ? 'bg-warn' : 'bg-ok'
@@ -520,7 +497,7 @@ function AccountCard({ account, onChanged }: { account: AccountInfo; onChanged: 
         {account.registered_via && (
           <Badge variant="plan">via {providerDisplay(account.registered_via)}</Badge>
         )}
-        {premium && <Badge variant="premium">AI Premium</Badge>}
+        {premium && <Badge variant="premium">{t('quota.workspace_credits')}</Badge>}
         {(account.research_usage != null && account.research_usage > 0) && (
           <Badge variant={researchLimited ? 'warning' : 'research'}>
             <IconFlask /> Research {t('account.used', { count: account.research_usage })}{premium ? '' : '/3'}
@@ -542,21 +519,9 @@ function AccountCard({ account, onChanged }: { account: AccountInfo; onChanged: 
       {/* Quotas */}
       <div className="flex flex-wrap gap-3 text-[10px] text-text-secondary mb-2">
         <span>Workflow: {t(account.workflow_status?.available ? 'agent.yes' : 'agent.no')}</span>
-        <span>Agent: {account.agent_capability?.status ?? 'unknown'} · {t('agent.quota')}: {account.agent_capability?.quota ?? 'unknown'}</span>
+        <span>Agent: {t(account.agent_capability?.quota === 'not_rejected' ? 'quota.call_verified' : 'quota.call_unverified')}</span>
       </div>
-      {sameBasicQuota ? (
-        <QuotaBar label="Basic" usage={spaceQuota.usage} limit={spaceQuota.limit} />
-      ) : (
-        <>
-          <QuotaBar label="Space" usage={spaceQuota.usage} limit={spaceQuota.limit} />
-          {userQuota.limit > 0 && <QuotaBar label="User" usage={userQuota.usage} limit={userQuota.limit} />}
-        </>
-      )}
-      {premium && <QuotaBar label="Premium" labelClass="text-[#7eb8ff]" usage={account.premium_usage} limit={account.premium_limit} />}
-      <div className="flex flex-wrap gap-3 mt-2 text-[10px] text-text-muted">
-        <span>{t('account.basic_remaining')} {fmt(account.remaining || 0)}</span>
-        {premium && <span>{t('account.premium_remaining')} {fmt(account.premium_balance || 0)}</span>}
-      </div>
+      <AccountQuotaDisplay account={account} />
 
       {/* Models (expandable) */}
       {showModels && account.models && account.models.length > 0 && (
@@ -776,10 +741,6 @@ export default function App() {
     // We split them out explicitly for the operator.
     const exhausted = data.total - data.available
     const availableRate = data.total > 0 ? Math.round((data.available / data.total) * 100) : 0
-    const sameBasicQuota = isSameQuota(
-      { usage: s?.total_space_usage ?? 0, limit: s?.total_space_limit ?? 0 },
-      { usage: s?.total_user_usage ?? 0, limit: s?.total_user_limit ?? 0 },
-    )
     return {
       exhausted,
       exhaustedOnly: s?.exhausted_only ?? 0,
@@ -793,7 +754,6 @@ export default function App() {
       totalPremiumLimit: s?.total_premium_limit ?? 0,
       premiumAccounts: s?.premium_accounts ?? 0,
       researchLimited: s?.research_limited ?? 0,
-      sameBasicQuota,
     }
   }, [data])
 
@@ -850,16 +810,12 @@ export default function App() {
               color="var(--color-ok)"
             />
             <StatCard
-              label={t('stats.basic_remaining')} value={fmt(summary.totalRemaining)}
-              sub={summary.sameBasicQuota
-                ? t('account.quota_unified')
-                : `Space ${fmt(summary.totalSpaceRemaining)} · User ${fmt(summary.totalUserRemaining)}`}
+              label={t('quota.monthly')} value={data?.summary?.highest_monthly_used_percent != null ? `${usagePercent(data.summary.highest_monthly_used_percent)}%` : '—'}
+              sub={t('quota.highest_monthly', { count: data?.summary?.monthly_usage_known ?? 0 })}
             />
             <StatCard
               label={t('stats.premium_remaining')} value={fmt(summary.totalPremiumBalance)}
-              sub={summary.totalPremiumLimit > 0
-                ? t('stats.premium_accounts_count', { count: summary.premiumAccounts, usage: summary.totalResearchUsage })
-                : t('stats.no_premium_credits', { limit: summary.researchLimited })}
+              sub={t('quota.credit_workspaces', { count: data?.summary?.workspace_count ?? 0 })}
               color="var(--color-research, #9b51e0)"
             />
             <StatCard

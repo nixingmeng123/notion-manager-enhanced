@@ -1,4 +1,26 @@
 {
+  "quota": {
+    "monthly": "个人 AI 月度用量",
+    "used_percent": "已用 {{percent}}%",
+    "resets": "重置于 {{date}}",
+    "unavailable": "尚未读取",
+    "workspace_credits": "工作区 Credits",
+    "workspace_credits_used": "工作区 Credits 已用 / 本期分配",
+    "workspace_remaining": "剩余 {{count}} Credits",
+    "shared_note": "同一工作区共享，不是个人月度额度",
+    "member_credits_used": "个人 Credits 已用 / 月度限额",
+    "member_unavailable": "个人 Credits 限额未设置或未公开，不能从共享余额推算。",
+    "details": "其他用量与历史记录",
+    "rolling": "个人 AI 短期用量（{{window}}）",
+    "legacy_note": "下方是旧版免费用量，不能用于判断当前 Agent 月度额度。",
+    "legacy_space": "历史免费用量 · 工作区",
+    "legacy_user": "历史免费用量 · 个人",
+    "call_verified": "已验证成功调用",
+    "call_unverified": "尚未验证",
+    "highest_monthly": "最高个人已用 · {{count}} 个成员已读取",
+    "credit_workspaces": "{{count}} 个工作区，共享余额只计一次",
+    "overview_note": "月度 AI 用量按成员显示；Credits 按工作区共享，{{count}} 个工作区的余额已去重。历史免费用量不计入当前月度额度。"
+  },
   "auth": {
     "prompt": "输入管理密钥以访问 Dashboard",
     "placeholder": "管理密钥",
@@ -19,7 +41,7 @@
     "used": "已用 {{count}}",
     "no_workspace": "无工作区",
     "basic_remaining": "Basic 剩余",
-    "premium_remaining": "Premium 剩余",
+    "premium_remaining": "工作区 Credits 剩余",
     "last_checked": "检查 {{date}}",
     "recent_ai": "最近 AI {{date}}",
     "unavailable": "不可用 ⚠",
@@ -30,7 +52,7 @@
     "total_accounts": "总账号",
     "available": "可用",
     "basic_remaining": "Basic 剩余",
-    "premium_remaining": "Premium 剩余",
+    "premium_remaining": "工作区 Credits 剩余",
     "token_usage": "Token 用量",
     "available_spent_no_workspace": "{{available}} 可用 / {{spent}} 耗尽 / {{noWorkspace}} 无工作区",
     "ratio": "占比 {{percent}}%",
@@ -38,7 +60,7 @@
     "no_premium_credits": "无 premium credits · Research 受限 {{limit}}",
     "today_usage": "今日 {{today}} · 输入 {{input}} · 输出 {{output}}",
     "no_usage": "尚未产生用量",
-    "basic_overview": "Basic 额度概览",
+    "basic_overview": "当前用量说明",
     "remaining": "剩余"
   },
   "actions": {

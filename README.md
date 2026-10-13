@@ -32,6 +32,7 @@ The startup script uses a 15-second request start interval per account. After up
 - **Request controls**: timeout, cancellation and per-account request spacing. Explicit reasoning effort is checked against the upstream response.
 - **Web search**: Agent uses Notion's native browsing tools when allowed by the dashboard setting or `X-Web-Search` header. Tool results establish whether a search actually occurred.
 - **Image input**: Messages image blocks, Chat Completions `image_url`, and Responses `input_image` are uploaded through Agent Service and attached by file ID. Opus 5.5 image recognition has been verified.
+- **Usage display**: personal AI monthly usage and reset dates are separate from member credit spending caps, shared workspace Credits and historical free usage. Shared balances are counted once per workspace.
 - **Dashboard settings**: Agent enablement, default protocol, timeout, polling interval and request interval.
 
 ## Client requests

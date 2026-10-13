@@ -32,6 +32,7 @@ powershell -ExecutionPolicy Bypass -File .\scripts\start-local.ps1
 - **请求控制**：支持超时、取消、每账号请求间隔；明确指定思考强度时核对实际返回值。
 - **联网搜索**：Agent 采用 Notion 原生网页检索，允许与否由管理面板或 `X-Web-Search` 请求头控制；实际检索以工具结果为准。
 - **图片输入**：Messages 的图片块、Chat Completions 的 `image_url` 和 Responses 的 `input_image` 通过 Agent Service 上传并以文件 ID 附加。Opus 5.5 已实测能够识图。
+- **用量显示**：读取个人 AI 月度用量和重置日期，区分成员 credit 限额、工作区共享 Credits 与旧版历史免费用量。同一工作区的共享余额只汇总一次。
 - **运行设置**：管理面板可调整 Agent 开关、默认协议、超时、轮询间隔和请求间隔。
 
 ## 客户端接入

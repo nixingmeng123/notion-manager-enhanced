@@ -52,12 +52,13 @@ type Account struct {
 
 // QuotaInfo holds AI usage quota information from V1 + V2 APIs
 type QuotaInfo struct {
-	IsEligible    bool  `json:"isEligible"`
-	SpaceUsage    int   `json:"spaceUsage"`
-	SpaceLimit    int   `json:"spaceLimit"`
-	UserUsage     int   `json:"userUsage"`
-	UserLimit     int   `json:"userLimit"`
-	LastUsageAtMs int64 `json:"lastSpaceUsageAtMs"`
+	Display       *QuotaDisplay `json:"display,omitempty"`
+	IsEligible    bool          `json:"isEligible"`
+	SpaceUsage    int           `json:"spaceUsage"`
+	SpaceLimit    int           `json:"spaceLimit"`
+	UserUsage     int           `json:"userUsage"`
+	UserLimit     int           `json:"userLimit"`
+	LastUsageAtMs int64         `json:"lastSpaceUsageAtMs"`
 	// Research mode (from V1 API: getAIUsageEligibility)
 	ResearchModeUsage int `json:"researchModeUsage"` // usage when "Share data to improve AI" is enabled
 	// Premium credits (from V2 API: getAIUsageEligibilityV2)

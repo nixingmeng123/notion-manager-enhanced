@@ -78,7 +78,7 @@ func classifyAgentHTTPError(status int, body []byte, endpoints ...string) (resul
 		operation := "Agent API"
 		if len(endpoints) > 0 {
 			switch endpoints[0] {
-			case "getAvailableModels", "createAgentThread", "getThreadTranscript", "createAgentServiceFileUploadURL", "completeAgentServiceFileUpload":
+			case "getAvailableModels", "createAgentThread", "getThreadTranscript", "createAgentServiceFileUploadURL", "completeAgentServiceFileUpload", "getCreditRateLimitStatus", "getPersonalAgentCreditUsage":
 				operation = endpoints[0]
 			}
 		}

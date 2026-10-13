@@ -1914,6 +1914,7 @@ func CheckQuota(acc *Account) (*QuotaInfo, error) {
 		v2.PremiumCredits.PerSource.MonthlyCommitted.Limit > 0 ||
 		v2.PremiumCredits.PerSource.YearlyElastic.Limit > 0 ||
 		info.PremiumBalance > 0
+	info.Display = fetchQuotaDisplay(acc)
 
 	return info, nil
 }

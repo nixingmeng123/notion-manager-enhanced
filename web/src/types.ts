@@ -26,6 +26,8 @@ export interface AgentCapability {
 }
 
 export interface AccountInfo {
+	quota_display?: QuotaDisplay
+	workspace_key?: string
 	workflow_status?: { available: boolean }
 	agent_capability?: AgentCapability
   account_id: string
@@ -74,6 +76,21 @@ export interface ProviderInfo {
   format_hint: string
   recommended_concurrency: number
   enabled: boolean
+}
+
+export interface AIUsageWindow {
+  used: number
+  limit: number
+  used_percent: number
+  resets_at_ms?: number
+  window?: string
+}
+
+export interface QuotaDisplay {
+  source: string
+  scope: string
+  ai_usage: { status: string; source: string; checked_at: string; monthly?: AIUsageWindow; rolling?: AIUsageWindow }
+  member_credits: { status: string; used?: number; limit?: number }
 }
 
 export type JobState = 'running' | 'done' | 'cancelled'
@@ -128,6 +145,9 @@ export interface RefreshStatus {
 // fields reflect ALL accounts regardless of the current ?q= filter, so
 // the headline numbers stay stable while the user searches.
 export interface AccountSummary {
+  workspace_count?: number
+  monthly_usage_known?: number
+  highest_monthly_used_percent?: number
   exhausted_only: number
   no_workspace: number
   premium_accounts: number

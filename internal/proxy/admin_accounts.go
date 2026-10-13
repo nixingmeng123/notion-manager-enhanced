@@ -12,20 +12,23 @@ import (
 //
 // JSON tags use snake_case to match the rest of the admin API.
 type AccountSummary struct {
-	ExhaustedOnly       int   `json:"exhausted_only"`
-	NoWorkspace         int   `json:"no_workspace"`
-	PremiumAccounts     int   `json:"premium_accounts"`
-	ResearchLimited     int   `json:"research_limited"`
-	TotalResearchUsage  int   `json:"total_research_usage"`
-	TotalRemaining      int   `json:"total_remaining"`
-	TotalSpaceUsage     int   `json:"total_space_usage"`
-	TotalSpaceLimit     int   `json:"total_space_limit"`
-	TotalSpaceRemaining int   `json:"total_space_remaining"`
-	TotalUserUsage      int   `json:"total_user_usage"`
-	TotalUserLimit      int   `json:"total_user_limit"`
-	TotalUserRemaining  int   `json:"total_user_remaining"`
-	TotalPremiumBalance int64 `json:"total_premium_balance"`
-	TotalPremiumLimit   int64 `json:"total_premium_limit"`
+	WorkspaceCount            int      `json:"workspace_count"`
+	MonthlyUsageKnown         int      `json:"monthly_usage_known"`
+	HighestMonthlyUsedPercent *float64 `json:"highest_monthly_used_percent,omitempty"`
+	ExhaustedOnly             int      `json:"exhausted_only"`
+	NoWorkspace               int      `json:"no_workspace"`
+	PremiumAccounts           int      `json:"premium_accounts"`
+	ResearchLimited           int      `json:"research_limited"`
+	TotalResearchUsage        int      `json:"total_research_usage"`
+	TotalRemaining            int      `json:"total_remaining"`
+	TotalSpaceUsage           int      `json:"total_space_usage"`
+	TotalSpaceLimit           int      `json:"total_space_limit"`
+	TotalSpaceRemaining       int      `json:"total_space_remaining"`
+	TotalUserUsage            int      `json:"total_user_usage"`
+	TotalUserLimit            int      `json:"total_user_limit"`
+	TotalUserRemaining        int      `json:"total_user_remaining"`
+	TotalPremiumBalance       int64    `json:"total_premium_balance"`
+	TotalPremiumLimit         int64    `json:"total_premium_limit"`
 }
 
 // summarizeAccounts walks the full account-detail list and produces the
@@ -33,7 +36,15 @@ type AccountSummary struct {
 // as zero.
 func summarizeAccounts(accounts []map[string]interface{}) AccountSummary {
 	var s AccountSummary
+	seenWorkspaces := make(map[string]bool)
 	for _, a := range accounts {
+		if display, ok := a["quota_display"].(*QuotaDisplay); ok && display != nil && display.AIUsage.Monthly != nil {
+			s.MonthlyUsageKnown++
+			used := display.AIUsage.Monthly.UsedPercent
+			if s.HighestMonthlyUsedPercent == nil || used > *s.HighestMonthlyUsedPercent {
+				s.HighestMonthlyUsedPercent = &used
+			}
+		}
 		exh := mapBool(a, "exhausted")
 		perm := mapBool(a, "permanent")
 		nws := mapBool(a, "no_workspace")
@@ -51,14 +62,21 @@ func summarizeAccounts(accounts []map[string]interface{}) AccountSummary {
 		}
 		s.TotalResearchUsage += mapInt(a, "research_usage")
 		s.TotalRemaining += mapInt(a, "remaining")
-		s.TotalSpaceUsage += mapInt(a, "space_usage")
-		s.TotalSpaceLimit += mapInt(a, "space_limit")
-		s.TotalSpaceRemaining += mapInt(a, "space_remaining")
+		workspace := mapString(a, "workspace_key")
+		// Missing keys retain the legacy per-account behavior. Known workspace
+		// balances must not be multiplied by the number of imported members.
+		if workspace == "" || !seenWorkspaces[workspace] {
+			s.WorkspaceCount++
+			s.TotalSpaceUsage += mapInt(a, "space_usage")
+			s.TotalSpaceLimit += mapInt(a, "space_limit")
+			s.TotalSpaceRemaining += mapInt(a, "space_remaining")
+			s.TotalPremiumBalance += int64(mapInt(a, "premium_balance"))
+			s.TotalPremiumLimit += int64(mapInt(a, "premium_limit"))
+			seenWorkspaces[workspace] = true
+		}
 		s.TotalUserUsage += mapInt(a, "user_usage")
 		s.TotalUserLimit += mapInt(a, "user_limit")
 		s.TotalUserRemaining += mapInt(a, "user_remaining")
-		s.TotalPremiumBalance += int64(mapInt(a, "premium_balance"))
-		s.TotalPremiumLimit += int64(mapInt(a, "premium_limit"))
 	}
 	return s
 }

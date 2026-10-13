@@ -157,6 +157,7 @@ func cloneQuotaInfo(src *QuotaInfo) *QuotaInfo {
 		return nil
 	}
 	dst := *src
+	dst.Display = cloneQuotaDisplay(src.Display)
 	return &dst
 }
 
@@ -1306,6 +1307,7 @@ func saveAccountFile(dir string, acc *Account) error {
 	}
 	if quota.Info != nil {
 		existing["quota_info"] = map[string]interface{}{
+			"display":             quota.Info.Display,
 			"is_eligible":         quota.Info.IsEligible,
 			"space_usage":         quota.Info.SpaceUsage,
 			"space_limit":         quota.Info.SpaceLimit,
@@ -1444,6 +1446,7 @@ func (p *AccountPool) GetAccountDetails() []map[string]interface{} {
 			"plan":           acc.PlanType,
 			"space":          acc.SpaceName,
 			"space_id_short": acc.ShortSpaceID(),
+			"workspace_key":  ComputeAccountID("workspace", acc.SpaceID),
 			"exhausted":      p.isQuotaExhausted(acc),
 			"permanent":      quota.PermanentlyExhausted,
 			"no_workspace":   p.hasNoWorkspace(acc),
@@ -1457,6 +1460,7 @@ func (p *AccountPool) GetAccountDetails() []map[string]interface{} {
 		}
 		if quota.Info != nil {
 			entry["eligible"] = quota.Info.IsEligible
+			entry["quota_display"] = quota.Info.Display
 			entry["usage"] = quota.Info.SpaceUsage
 			entry["limit"] = quota.Info.SpaceLimit
 			entry["space_usage"] = quota.Info.SpaceUsage
@@ -1570,23 +1574,25 @@ func loadPersistedWorkspace(data []byte, acc *Account) {
 func loadPersistedQuotaInfo(data []byte) *QuotaInfo {
 	var raw struct {
 		QuotaInfo *struct {
-			IsEligible        bool  `json:"is_eligible"`
-			SpaceUsage        int   `json:"space_usage"`
-			SpaceLimit        int   `json:"space_limit"`
-			UserUsage         int   `json:"user_usage"`
-			UserLimit         int   `json:"user_limit"`
-			LastUsageAt       int64 `json:"last_usage_at"`
-			ResearchModeUsage int   `json:"research_mode_usage"`
-			HasPremium        bool  `json:"has_premium"`
-			PremiumBalance    int   `json:"premium_balance"`
-			PremiumUsage      int   `json:"premium_usage"`
-			PremiumLimit      int   `json:"premium_limit"`
+			Display           *QuotaDisplay `json:"display"`
+			IsEligible        bool          `json:"is_eligible"`
+			SpaceUsage        int           `json:"space_usage"`
+			SpaceLimit        int           `json:"space_limit"`
+			UserUsage         int           `json:"user_usage"`
+			UserLimit         int           `json:"user_limit"`
+			LastUsageAt       int64         `json:"last_usage_at"`
+			ResearchModeUsage int           `json:"research_mode_usage"`
+			HasPremium        bool          `json:"has_premium"`
+			PremiumBalance    int           `json:"premium_balance"`
+			PremiumUsage      int           `json:"premium_usage"`
+			PremiumLimit      int           `json:"premium_limit"`
 		} `json:"quota_info"`
 	}
 	if err := json.Unmarshal(data, &raw); err != nil || raw.QuotaInfo == nil {
 		return nil
 	}
 	return &QuotaInfo{
+		Display:           cloneQuotaDisplay(raw.QuotaInfo.Display),
 		IsEligible:        raw.QuotaInfo.IsEligible,
 		SpaceUsage:        raw.QuotaInfo.SpaceUsage,
 		SpaceLimit:        raw.QuotaInfo.SpaceLimit,

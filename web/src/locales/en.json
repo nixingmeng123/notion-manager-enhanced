@@ -1,4 +1,26 @@
 {
+  "quota": {
+    "monthly": "Personal AI monthly usage",
+    "used_percent": "{{percent}}% used",
+    "resets": "Resets on {{date}}",
+    "unavailable": "Not yet available",
+    "workspace_credits": "Workspace Credits",
+    "workspace_credits_used": "Workspace Credits used / period allocation",
+    "workspace_remaining": "{{count}} Credits remaining",
+    "shared_note": "Shared workspace balance, separate from personal AI allowance",
+    "member_credits_used": "Personal Credits used / monthly limit",
+    "member_unavailable": "Personal credit limit is not configured or exposed; it cannot be inferred from the shared balance.",
+    "details": "Other usage and history",
+    "rolling": "Personal AI short window ({{window}})",
+    "legacy_note": "Legacy free usage below does not identify the current Agent monthly allowance.",
+    "legacy_space": "Lifetime free usage · workspace",
+    "legacy_user": "Lifetime free usage · person",
+    "call_verified": "Successful call verified",
+    "call_unverified": "Not yet verified",
+    "highest_monthly": "Highest personal usage · {{count}} members checked",
+    "credit_workspaces": "{{count}} workspaces; shared balances counted once",
+    "overview_note": "AI monthly usage belongs to each member. Credits are shared within each workspace; balances for {{count}} workspaces are deduplicated. Historical free usage is separate."
+  },
   "auth": {
     "prompt": "Enter admin key to access Dashboard",
     "placeholder": "Admin Key",
@@ -19,7 +41,7 @@
     "used": "Used {{count}}",
     "no_workspace": "No Workspace",
     "basic_remaining": "Basic Remaining",
-    "premium_remaining": "Premium Remaining",
+    "premium_remaining": "Workspace Credits Remaining",
     "last_checked": "Checked {{date}}",
     "recent_ai": "Recent AI {{date}}",
     "unavailable": "Unavailable ⚠",
@@ -30,7 +52,7 @@
     "total_accounts": "Total Accounts",
     "available": "Available",
     "basic_remaining": "Basic Remaining",
-    "premium_remaining": "Premium Remaining",
+    "premium_remaining": "Workspace Credits Remaining",
     "token_usage": "Token Usage",
     "available_spent_no_workspace": "{{available}} Available / {{spent}} Spent / {{noWorkspace}} No Workspace",
     "ratio": "Ratio {{percent}}%",
@@ -38,7 +60,7 @@
     "no_premium_credits": "No premium credits · Research limited {{limit}}",
     "today_usage": "Today {{today}} · Input {{input}} · Output {{output}}",
     "no_usage": "No usage yet",
-    "basic_overview": "Basic Quota Overview",
+    "basic_overview": "Current Usage",
     "remaining": "Remaining"
   },
   "actions": {
