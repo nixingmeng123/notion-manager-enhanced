@@ -18,7 +18,7 @@ powershell -ExecutionPolicy Bypass -File .\scripts\start-local.ps1
 3. 打开 `http://127.0.0.1:8088/dashboard/`。
 4. 使用首次启动生成的管理密码登录。管理密码和 API Key 保存在本机 `.local-runtime/local-access.json`。
 5. 在“添加账号”中导入自己的已登录 Notion 会话。
-6. 使用模型名 `agent/opus-5.5` 调用 Personal Agent V3。
+6. 从 `/v1/models` 返回的已验证列表中选择 `agent/` 模型，调用 Personal Agent V3。
 
 启动脚本采用每账号 15 秒的请求起始间隔。升级已有配置后，可在管理面板将“账号请求间隔”设为 15 秒；旧配置不会被启动脚本自动改写。
 
@@ -32,6 +32,7 @@ powershell -ExecutionPolicy Bypass -File .\scripts\start-local.ps1
 - **请求控制**：支持超时、取消、每账号请求间隔；明确指定思考强度时核对实际返回值。
 - **联网搜索**：Agent 采用 Notion 原生网页检索，允许与否由管理面板或 `X-Web-Search` 请求头控制；实际检索以工具结果为准。
 - **图片输入**：Messages 的图片块、Chat Completions 的 `image_url` 和 Responses 的 `input_image` 通过 Agent Service 上传并以文件 ID 附加。Opus 5.5 已实测能够识图。
+- **图片生成**：通过 `/v1/images/generations` 调用 Notion 原生生图，返回图片数据及实际模型、提供方。详见[参数与实测记录](docs/IMAGE_GENERATION.md)。
 - **用量显示**：读取个人 AI 月度用量和重置日期，区分成员 credit 限额、工作区共享 Credits 与旧版历史免费用量。同一工作区的共享余额只汇总一次。
 - **运行设置**：管理面板可调整 Agent 开关、默认协议、超时、轮询间隔和请求间隔。
 
@@ -42,6 +43,7 @@ powershell -ExecutionPolicy Bypass -File .\scripts\start-local.ps1
 | `POST /v1/messages` | Messages 请求格式 |
 | `POST /v1/chat/completions` | Chat Completions 请求格式 |
 | `POST /v1/responses` | Responses 请求格式 |
+| `POST /v1/images/generations` | 原生生图（`notion-image`） |
 | `GET /v1/models` | 模型状态列表 |
 
 请求使用 `Authorization: Bearer <api_key>` 或 `x-api-key: <api_key>` 鉴权。
@@ -53,7 +55,9 @@ powershell -ExecutionPolicy Bypass -File .\scripts\start-local.ps1
 }
 ```
 
-Opus 5.5 已实测返回 Notion 模型 ID `albuquerque-quinn`。静态模型映射是候选信息，不能据此认定其他模型已获授权或实测可用。
+此前测试工作区开放 Opus 5.5 时，曾实测返回 `albuquerque-quinn`。同一工作区后来在商业试用测试中自动返回 `omniberry-sundae`，目前该账号只确认了聊天模型 `agent/gpt-6.1-sol` 的身份一致。使用时以自己账号的已验证模型列表为准；静态映射不代表权限或调用成功。
+
+生图使用模型名 `notion-image`，调用 `/v1/images/generations`，设置 `n: 1`、`size: "auto"` 和 `response_format: "b64_json"`。2026-10-13 实测返回 `nano-banana` / `google`。首次成功生图后模型列表才会出现此项；Notion 自动选择提供方和图像模型。具体示例见[生图文档](docs/IMAGE_GENERATION.md)。
 
 ## 源码运行
 

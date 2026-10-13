@@ -39,6 +39,9 @@ func asGatewayError(err error) *GatewayError {
 type inferenceRoute struct{ Protocol, Model string }
 
 func resolveInferenceRoute(model string) (inferenceRoute, error) {
+	if strings.TrimSpace(model) == notionImageModel {
+		return inferenceRoute{}, gatewayError("unsupported_capability", 400, "Use /v1/images/generations for notion-image", false)
+	}
 	protocol := enhancedConfigSnapshot().DefaultProtocol
 	name := strings.TrimSpace(model)
 	if strings.Contains(name, "/") {

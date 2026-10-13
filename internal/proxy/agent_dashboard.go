@@ -123,6 +123,15 @@ func buildClientModels(pool *AccountPool) []publicModel {
 		}
 		result = append(result, model)
 	}
+	for _, account := range accounts {
+		if imageAccountUsable(pool, account) && account.imageSnapshot().Status == "confirmed" {
+			result = append(result, publicModel{ID: notionImageModel, Object: "model", Created: publicModelCreatedAt,
+				OwnedBy: "notion-manager", Protocol: "image", Available: true, Authorization: "confirmed",
+				AuthorizationScope: "runtime_image_generation", Capabilities: []string{"image_generation"},
+				SupportedEndpoints: []string{"/v1/images/generations"}})
+			break
+		}
+	}
 	sort.Slice(result, func(i, j int) bool { return result[i].ID < result[j].ID })
 	return result
 }

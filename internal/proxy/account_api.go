@@ -434,6 +434,7 @@ func SaveAccountToFile(acc *Account, dir string) (string, error) {
 	}
 	modelSnapshot := acc.modelsSnapshot()
 	data["agent_capability"] = acc.agentSnapshot()
+	data["image_capability"] = acc.imageSnapshot()
 	if acc.FullCookie != "" {
 		data["full_cookie"] = acc.FullCookie
 	}

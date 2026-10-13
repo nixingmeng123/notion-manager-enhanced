@@ -194,6 +194,7 @@ func newMux(pool *proxy.AccountPool, accountsDir string, apiKey string, dashAuth
 	mux.HandleFunc("/v1/messages", proxy.HandleAnthropicMessages(pool))
 	mux.HandleFunc("/v1/chat/completions", proxy.HandleOpenAIChatCompletions(pool))
 	mux.HandleFunc("/v1/responses", proxy.HandleOpenAIResponses(pool))
+	mux.HandleFunc("/v1/images/generations", proxy.HandleImageGenerations(pool))
 	mux.HandleFunc("/v1/models", proxy.HandlePublicModels(pool))
 	mux.HandleFunc("/models", proxy.HandlePublicModels(pool))
 

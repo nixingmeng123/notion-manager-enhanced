@@ -40,6 +40,8 @@ type publicModel struct {
 	ReasoningSource    string   `json:"reasoning_source,omitempty"`
 	SessionMode        string   `json:"session_mode,omitempty"`
 	StreamingMode      string   `json:"streaming_mode,omitempty"`
+	Capabilities       []string `json:"capabilities,omitempty"`
+	SupportedEndpoints []string `json:"supported_endpoints,omitempty"`
 	ID                 string   `json:"id"`
 	Object             string   `json:"object"`
 	Created            int64    `json:"created"`

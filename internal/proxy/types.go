@@ -14,6 +14,7 @@ type Account struct {
 	agentDiscoveryMu sync.Mutex
 	agentRequestGate chan struct{}
 	AgentCapability  *AgentCapability `json:"agent_capability,omitempty"`
+	ImageCapability  *ImageCapability `json:"image_capability,omitempty"`
 	TokenV2          string           `json:"token_v2"`
 	UserID           string           `json:"user_id"`
 	UserName         string           `json:"user_name"`

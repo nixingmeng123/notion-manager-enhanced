@@ -1290,6 +1290,7 @@ func saveAccountFile(dir string, acc *Account) error {
 	}
 
 	existing["agent_capability"] = acc.agentSnapshot()
+	existing["image_capability"] = acc.imageSnapshot()
 
 	// Migrate: persist account_id into legacy files
 	if acc.AccountID != "" {
@@ -1493,6 +1494,7 @@ func (p *AccountPool) GetAccountDetails() []map[string]interface{} {
 		entry["models"] = modelEntries
 		entry["workflow_status"] = map[string]interface{}{"available": !p.isUnusable(acc), "quota": quota.Info}
 		entry["agent_capability"] = acc.agentSnapshot()
+		entry["image_capability"] = acc.imageSnapshot()
 		details = append(details, entry)
 	}
 	return details

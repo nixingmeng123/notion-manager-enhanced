@@ -18,7 +18,7 @@ powershell -ExecutionPolicy Bypass -File .\scripts\start-local.ps1
 3. Open `http://127.0.0.1:8088/dashboard/`.
 4. Sign in with the generated dashboard password. The password and API key are saved locally in `.local-runtime/local-access.json`.
 5. Import your existing signed-in Notion session through **Add account**.
-6. Select `agent/opus-5.5` for Personal Agent V3 requests.
+6. Select a verified `agent/` model returned by `/v1/models` for Personal Agent V3 requests.
 
 The startup script uses a 15-second request start interval per account. After upgrading an existing configuration, set the interval to 15 seconds in the dashboard; the startup script does not overwrite an existing configuration.
 
@@ -32,6 +32,7 @@ The startup script uses a 15-second request start interval per account. After up
 - **Request controls**: timeout, cancellation and per-account request spacing. Explicit reasoning effort is checked against the upstream response.
 - **Web search**: Agent uses Notion's native browsing tools when allowed by the dashboard setting or `X-Web-Search` header. Tool results establish whether a search actually occurred.
 - **Image input**: Messages image blocks, Chat Completions `image_url`, and Responses `input_image` are uploaded through Agent Service and attached by file ID. Opus 5.5 image recognition has been verified.
+- **Image generation**: native Notion image generation through `/v1/images/generations`, with inline image bytes and the actual returned provider/model. See [supported parameters](docs/IMAGE_GENERATION.md).
 - **Usage display**: personal AI monthly usage and reset dates are separate from member credit spending caps, shared workspace Credits and historical free usage. Shared balances are counted once per workspace.
 - **Dashboard settings**: Agent enablement, default protocol, timeout, polling interval and request interval.
 
@@ -42,6 +43,7 @@ The startup script uses a 15-second request start interval per account. After up
 | `POST /v1/messages` | Messages request format |
 | `POST /v1/chat/completions` | Chat Completions request format |
 | `POST /v1/responses` | Responses request format |
+| `POST /v1/images/generations` | Native image generation (`notion-image`) |
 | `GET /v1/models` | Model status list |
 
 Authenticate with `Authorization: Bearer <api_key>` or `x-api-key: <api_key>`.
@@ -53,7 +55,9 @@ Authenticate with `Authorization: Bearer <api_key>` or `x-api-key: <api_key>`.
 }
 ```
 
-Opus 5.5 has been verified to return the Notion model ID `albuquerque-quinn`. Static mappings are candidates; they do not establish permission or successful inference for other models.
+Opus 5.5 previously returned the Notion model ID `albuquerque-quinn` when enabled for the test workspace. The same workspace's later Business trial tests returned `omniberry-sundae` automatically, so currently only `agent/gpt-6.1-sol` is identity-verified for chat there. Always use your own account's verified model list. Static mappings do not establish permission or successful inference.
+
+For image generation, use `notion-image` at `/v1/images/generations`, with `n: 1`, `size: "auto"` and `response_format: "b64_json"`. On 2026-10-13, the native generator reported `nano-banana` / `google`. The alias appears in model discovery after a successful generation; the upstream selects its provider/model automatically. See [the image generation example](docs/IMAGE_GENERATION.md).
 
 ## Run from source
 
@@ -79,6 +83,7 @@ Intermittent upstream HTTP 400 errors remain possible. A 15-second interval miti
 
 - [Agent V3](docs/AGENT_V3.md): mappings, authorization, reasoning effort and live results.
 - [Account access](docs/accounts.md): import an existing Notion session.
+- [Image generation](docs/IMAGE_GENERATION.md): request format, automatic model selection and live results.
 - [Dashboard](docs/dashboard.md): authentication, account status and settings.
 - [Configuration](docs/configuration.md): runtime configuration and environment variables.
 - [Client requests](docs/api.md): request formats and Workflow compatibility; the Agent V3 documentation defines Agent capability limits.

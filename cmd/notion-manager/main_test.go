@@ -19,6 +19,7 @@ func TestRequiresAPIKey(t *testing.T) {
 		{path: "/v1/messages", want: true},
 		{path: "/v1/chat/completions", want: true},
 		{path: "/v1/responses", want: true},
+		{path: "/v1/images/generations", want: true},
 		{path: "/v1/models", want: true},
 		{path: "/models", want: true},
 		{path: "/health", want: false},
@@ -49,6 +50,8 @@ func TestAPIKeyAuthMiddleware_ProtectsModelsRoutes(t *testing.T) {
 		{name: "v1 models x-api-key", path: "/v1/models", headers: map[string]string{"x-api-key": "sk-test"}, want: http.StatusNoContent},
 		{name: "chat missing key", path: "/v1/chat/completions", want: http.StatusUnauthorized},
 		{name: "responses x-api-key", path: "/v1/responses", headers: map[string]string{"x-api-key": "sk-test"}, want: http.StatusNoContent},
+		{name: "images missing key", path: "/v1/images/generations", want: http.StatusUnauthorized},
+		{name: "images x-api-key", path: "/v1/images/generations", headers: map[string]string{"x-api-key": "sk-test"}, want: http.StatusNoContent},
 		{name: "health no auth", path: "/health", want: http.StatusNoContent},
 	}
 
@@ -115,6 +118,7 @@ func TestNewMux_RegistersOpenAIRoutes(t *testing.T) {
 	}{
 		{path: "/v1/chat/completions", body: `{"messages":[]}`},
 		{path: "/v1/responses", body: `{"input":"ping"}`},
+		{path: "/v1/images/generations", body: `{"prompt":"pelican","model":"notion-image"}`},
 	}
 
 	for _, tc := range tests {

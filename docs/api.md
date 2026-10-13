@@ -4,6 +4,8 @@
 
 Local clients can use `/v1/messages`, `/v1/chat/completions` and `/v1/responses`. Dashboard endpoints use separate session authentication; see [Dashboard](dashboard.md). This document describes Workflow compatibility. See [Agent V3 documentation](AGENT_V3.md) for Personal Agent models, reasoning effort and capability limits.
 
+Native image generation uses `POST /v1/images/generations` with model `notion-image`; see [image generation](IMAGE_GENERATION.md) for its separate request format and verified limits.
+
 ## Authentication
 
 Send the API key the same way you would talk to Anthropic:

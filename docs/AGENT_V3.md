@@ -165,6 +165,10 @@ Cherry Studio 的视觉图标和是否实际上传图片是两件事。本机 2.
 
 ## 验证方法
 
+### 生图（2026-10-13）
+
+图片生成使用独立的 `generateAiImage` 接口，不依赖 Personal Agent 的模型选择器。当前接入 `/v1/images/generations`，模型别名为 `notion-image`；支持单张、自动尺寸及 `b64_json`，成功返回后保存账号的生图能力，并加入客户端模型列表。原生及本地兼容接口各完成一次实测，均为 HTTP 200，返回模型标签 `nano-banana`、提供方 `google`；本地兼容接口耗时约 20 秒。接口没有指定提供方模型版本，不把这个标签扩展解释为某个具体 Gemini 版本。请求、图片及验证边界见[生图文档](IMAGE_GENERATION.md)。
+
 ### 月度用量与 Credits（2026-10-13）
 
 管理面板读取 Notion 公开前端实际使用的 `getCreditRateLimitStatus`（请求体 `spaceId`，请求头选择当前成员），将 `billingPeriodWindow` 的 `per_user` 用量及其重置时间显示为个人月度用量。百分比通过 `used / limit * 100` 计算，保留小数；不把旧接口的历史调用次数或共享余额换算成月度额度。`window` 的短期用量放在详情中。这里只读取当前状态的窗口，不将尚未公开或预览中的未来 allowance 视为已生效额度。
