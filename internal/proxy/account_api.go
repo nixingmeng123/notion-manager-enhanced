@@ -258,7 +258,12 @@ func DiscoverAccountFromTokenWithOptions(tokenV2 string, options AccountDiscover
 			}
 			break
 		}
-		if bestSpace == nil || (si.AIEnabled && si.PlanType != "free") {
+		// Keep the first linked workspace when candidates have the same rank.
+		// Replacing it for every paid, AI-enabled workspace silently selected
+		// the last one, including a different workspace with the same name.
+		if bestSpace == nil ||
+			(!bestSpace.AIEnabled && si.AIEnabled) ||
+			(bestSpace.AIEnabled == si.AIEnabled && bestSpace.PlanType == "free" && si.PlanType != "free") {
 			bestSpace = &si
 		}
 	}
@@ -604,8 +609,9 @@ func HandleAddAccount(pool *AccountPool, accountsDir string, auth *DashboardAuth
 		}
 
 		var body struct {
-			TokenV2      string `json:"token_v2"`
-			NotionUserID string `json:"notion_user_id"`
+			TokenV2       string `json:"token_v2"`
+			NotionUserID  string `json:"notion_user_id"`
+			NotionSpaceID string `json:"notion_space_id"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 			http.Error(w, `{"error":"invalid request body"}`, http.StatusBadRequest)
@@ -622,6 +628,7 @@ func HandleAddAccount(pool *AccountPool, accountsDir string, auth *DashboardAuth
 		// Discover account info
 		acc, err := DiscoverAccountFromTokenWithOptions(tokenV2, AccountDiscoveryOptions{
 			ActiveUserID: strings.TrimSpace(body.NotionUserID),
+			SpaceID:      strings.TrimSpace(body.NotionSpaceID),
 		})
 		if err != nil {
 			log.Printf("[add-account] discovery failed: %v", err)
@@ -652,10 +659,12 @@ func HandleAddAccount(pool *AccountPool, accountsDir string, auth *DashboardAuth
 			"status":   "ok",
 			"filename": filename,
 			"account": map[string]string{
-				"name":      acc.UserName,
-				"email":     acc.UserEmail,
-				"space":     acc.SpaceName,
-				"plan_type": acc.PlanType,
+				"account_id": acc.AccountID,
+				"name":       acc.UserName,
+				"email":      acc.UserEmail,
+				"space":      acc.SpaceName,
+				"space_id":   acc.SpaceID,
+				"plan_type":  acc.PlanType,
 			},
 		})
 	}

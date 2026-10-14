@@ -1,13 +1,96 @@
 package proxy
 
 import (
+	"encoding/json"
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"testing"
 	"time"
 )
+
+const sameNameWorkspaceDiscoveryFixture = `{
+  "recordMap": {
+    "notion_user": {
+      "target-user": {"value":{"name":"Target","email":"target@example.com"}}
+    },
+    "user_root": {
+      "target-user": {"value":{"space_view_pointers":[
+        {"spaceId":"free-space","id":"free-view"},
+        {"spaceId":"first-space","id":"first-view"},
+        {"spaceId":"last-space","id":"last-view"},
+        {"spaceId":"disabled-space","id":"disabled-view"}
+      ]}}
+    },
+    "space": {
+      "free-space": {"value":{"id":"free-space","name":"Free","plan_type":"free"}},
+      "first-space": {"value":{"id":"first-space","name":"Same Name","plan_type":"team"}},
+      "last-space": {"value":{"id":"last-space","name":"Same Name","plan_type":"team"}},
+      "disabled-space": {"value":{"id":"disabled-space","name":"Disabled AI","plan_type":"team","settings":{"disable_ai_feature":true}}}
+    }
+  }
+}`
+
+func TestDiscoverAccountKeepsFirstEquallyRankedWorkspace(t *testing.T) {
+	stubAccountDiscovery(t, sameNameWorkspaceDiscoveryFixture, nil)
+	account, err := DiscoverAccountFromToken("secret-token")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if account.SpaceID != "first-space" || account.SpaceViewID != "first-view" {
+		t.Fatalf("selected workspace=%q view=%q, want first paid AI-enabled workspace", account.SpaceID, account.SpaceViewID)
+	}
+}
+
+func TestHandleAddAccountPinsSameNameWorkspace(t *testing.T) {
+	for _, spaceID := range []string{"first-space", "last-space"} {
+		t.Run(spaceID, func(t *testing.T) {
+			stubAccountDiscovery(t, sameNameWorkspaceDiscoveryFixture, nil)
+			pool := NewAccountPool()
+			request := httptest.NewRequest(http.MethodPost, "/admin/accounts/add", strings.NewReader(
+				`{"token_v2":"secret-token","notion_user_id":"target-user","notion_space_id":" `+spaceID+` "}`,
+			))
+			recorder := httptest.NewRecorder()
+			HandleAddAccount(pool, t.TempDir(), NewDashboardAuth("", "")).ServeHTTP(recorder, request)
+			if recorder.Code != http.StatusOK {
+				t.Fatalf("status=%d body=%s", recorder.Code, recorder.Body.String())
+			}
+			account := pool.GetByEmail("target@example.com")
+			if account == nil || account.SpaceID != spaceID {
+				t.Fatal("import did not honor the explicitly selected workspace")
+			}
+			var response struct {
+				Account map[string]string `json:"account"`
+			}
+			if err := json.Unmarshal(recorder.Body.Bytes(), &response); err != nil {
+				t.Fatal(err)
+			}
+			if response.Account["space_id"] != spaceID || response.Account["account_id"] != account.AccountID {
+				t.Fatal("import response does not identify the workspace and account that were saved")
+			}
+		})
+	}
+}
+
+func TestHandleAddAccountRejectsInaccessibleWorkspaceWithoutSaving(t *testing.T) {
+	stubAccountDiscovery(t, sameNameWorkspaceDiscoveryFixture, nil)
+	pool := NewAccountPool()
+	accountsDir := t.TempDir()
+	request := httptest.NewRequest(http.MethodPost, "/admin/accounts/add", strings.NewReader(
+		`{"token_v2":"secret-token","notion_user_id":"target-user","notion_space_id":"not-accessible"}`,
+	))
+	recorder := httptest.NewRecorder()
+	HandleAddAccount(pool, accountsDir, NewDashboardAuth("", "")).ServeHTTP(recorder, request)
+	if recorder.Code != http.StatusBadRequest || pool.Count() != 0 {
+		t.Fatalf("inaccessible workspace status=%d pool count=%d", recorder.Code, pool.Count())
+	}
+	entries, err := os.ReadDir(accountsDir)
+	if err != nil || len(entries) != 0 {
+		t.Fatalf("invalid import saved account files: entries=%d error=%v", len(entries), err)
+	}
+}
 
 type accountDiscoveryRoundTripper func(*http.Request) (*http.Response, error)
 
